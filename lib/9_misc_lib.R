@@ -59,7 +59,7 @@ ggplot.xy = function(df=data.frame(),dfclust = data.frame(),outpdf = NA) {
   }
 }
 
-dist_test.get_color = function(pval,gp,verbose=F,debug=F) {
+dist.test_get.color = function(pval,gp,verbose=F,debug=F) {
   unif.bin.cols = brewer.pal(9,"Reds")
   unif.bin.brks = seq(gp$minpval,1,length.out=9); unif.bin.brks.diff = unif.bin.brks[2]-unif.bin.brks[1]
   unif.col = unif.bin.cols[unif.bin.brks < pval & unif.bin.brks+unif.bin.brks.diff > pval]

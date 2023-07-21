@@ -13,10 +13,8 @@ source('lib/srhlib.R')
 source('lib/9_misc_lib.R')
 
 
-
 get_peaktype = function(mystring) {
   if (length(grep("PEAK_TEMP",mystring)) > 0) {
-
     peaktype = "BOT"
   }
   else {
@@ -383,33 +381,6 @@ get_cluster = function(df, dfclust = data.frame(),gp=list()) {
   to_return = df
   return(to_return)
 }
-
-gp = list(
-  minX = 0,
-  minY = 0,
-  maxX = 3000,
-  maxY = 3000,
-  windowsmooth=25,
-  stepsmooth=1,
-  windowdist=50,
-  stepdist=1,
-  minpval = 0.9,
-  minpval2 = 0.25,
-  divby = 25
-)
-
-params = list(
-  gene     = 'T7_init_VR_20',
-  treat    = '^C$',
-  peaktype = 'TOP',
-  thres    = 0,
-  VR       = 20
-)
-params_not_exact = c(F,T,F,F,F)
-
-gp$mytitle = get_title(params=params)
-gp$mytitle.wrap = wrap_title(gp$mytitle,width = 40)
-gp$divby = triclust_get_divby(mytitle=gp$mytitle)$triclust.divby
 
 CLUSTFILES  = myorder(paste('resources/misc/',dir("./resources/misc/","*final*.RDS"),sep=''))
 PEAKFILES  = myorder(paste('resources/peaks/',dir("./resources/peaks/","*.BED"),sep=''))

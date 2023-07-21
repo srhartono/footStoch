@@ -8,28 +8,66 @@ an = as.numeric
 ai = as.integer
 sm = summary
 
+pasta = paste
+formals(pasta)$sep = ''
+
 size = function(df) {
-  if (defined(d)) {
+  if (defined(df) & is.data.frame(df)) {
     return(dim(df)[1])
+  } else if (defined(df) & is.vector(df)) {
+    return(length(df))
+  } else if (defined(df)) {
+    return(length(df))
+  } else {
+    return(0)
   }
 }
 
-myorder = function(x,orderby=NA)
-{
+myorder = function(x,orderby=NA) {
   res = tryCatch(
     {
-      if (is.na(orderby))
-      {
+      if (defined(orderby) == FALSE) {
         x[order(x)]
+      } else {
+        orderbys = data.frame(orderby=orderby,neg=F,type='NORMAL',rownames=F)
+        orders = list()
+        if (defined(orderbys$orderby[grep('^\\-',orderbys$orderby)])) {
+          orderbys$neg[grep('^\\-',orderbys$orderby)] = 'NEG'
+          orderbys$orderby[grep('^\\-',orderbys$orderby)] = gsub("^(\\-)(.+)$","\\2",orderbys$orderby[grep('^\\-',orderbys$orderby)])
+        }
+        if (defined(orderbys$orderby[grep('\\-?rownames\\(',orderbys$orderby)])) {
+          orderbys$type[grep('\\-?rownames\\(',orderbys$orderby)] = 'rownames'
+        }
+        print(orderbys)
+        orderInd = seq(1,size(x))
+        for (i in seq(size(orderbys),1,-1)) {
+          if (orderbys$type[i] == 'rownames') {
+            to_order = rownames(x)
+          } else {
+            to_order = x[,orderbys$orderby[i]]
+          }
+          if (orderbys$neg[i] == FALSE) {
+            x = x[order(to_order,orderInd),]
+            orderInd = seq(1,size(x))
+          } else {
+            if (is.numeric(to_order) == T) {
+              to_order = to_order * -1
+            } else {
+              to_order = as.numeric(to_order) * -1
+            }
+            print(to_order)
+            #to_order = to_order[-to_order]
+            x = x[order(to_order,orderInd),]
+            orderInd = seq(1,size(x))
+          } 
+        }
       }
-      else
-      {
-        x[order(-x[,colnames(x) == orderby]),]
-      }
+      x
     },
     error=function(err)
     {
-      message(paste("!!! srhlib.R::myorder($x,$ordreby): Canot reorder this mydata type:>>",class(x),'<<; $orderby is >>',head(orderby),'<<',sep=''))
+      message(paste("!!! srhlib.R::myorder($x,$orderby): Canot reorder this mydata type:>>",class(x)))#,'<<; $orderby is >>',head(orderby),'<<',sep=''))
+      message(err)
       return(invisible(x))
     }
   )
@@ -39,12 +77,11 @@ myorder = function(x,orderby=NA)
   return(to_return)
 }
 
-defined = function(mydata,direct=F,debug=F,verbose=F)
-{
+defined = function(mydata,direct=F,debug=F,verbose=F) {
   res = tryCatch(
     {
       if (!any(is.na(mydata)) & !any(is.null(mydata)) & length(mydata)> 0) { # if there is any real value then return TRUE
-        # if (length(mydata) == 0) {
+  # if (length(mydata) == 0) {
         #   FALSE
         # } else {
           TRUE
