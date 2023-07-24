@@ -10,9 +10,13 @@ ps = function(df,by,gp,p=NA,add=F,y.var = NA,params=list(),print=F,group='cluste
   if (defined(y.var) == FALSE) {
     y.var = 'y'
   }
+  
+  mycolors = c(brewer.pal(9,"Set1"),brewer.pal(9,"Set3"))
+  mybreaks = seq(0,length(mycolors)-1)
   p = ggplot(temp,aes(x=temp[,by],y=temp[,y.var],group=temp[,group])) +
   coord_cartesian(xlim=c(gp$minX,gp$maxX),ylim=c(gp$minY,max(temp[,y.var]))) +#max(500,max(temp$y)))) +
   geom_segment(aes(x=bybeg,xend=byend,y=temp[,y.var],yend=temp[,y.var],group=temp[,group],color=af(temp[,group]))) +#,color=rgb(0,0,0,0)) +
+  scale_color_manual(values=mycolors,breaks=mybreaks,label=mybreaks) +
 #  geom_rect(aes(xmin=bybeg,xmax=byend,ymin=y-0.5,ymax=y+0.5,fill=cluster),color=rgb(0,0,0,0)) +
 #  scale_x_continuous(breaks=seq(0,gp$maxX,500)) +
   xlab('R-loop Position (bp)') + ylab('Read Number') +

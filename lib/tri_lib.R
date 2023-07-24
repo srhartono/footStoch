@@ -12,6 +12,23 @@ library(scater)
 source('lib/srhlib.R')
 source('lib/9_misc_lib.R')
 
+gp = list(
+  minX = 0,
+  minY = 0,
+  maxX = 3000,
+  maxY = 3000,
+  windowsmooth=25,
+  stepsmooth=1,
+  windowdist=50,
+  stepdist=1,
+  minpval = 0.25,
+  minpval2 = 0.25,
+  dist.test_min.length = 5,
+  dist.test_min.unique = 2,
+  dist.test_max.unique.hots = 2,
+  divby=25
+)
+
 
 get_peaktype = function(mystring) {
   if (length(grep("PEAK_TEMP",mystring)) > 0) {
@@ -380,6 +397,664 @@ get_cluster = function(df, dfclust = data.frame(),gp=list()) {
   # }
   to_return = df
   return(to_return)
+}
+
+do_distributionTests = function(df = data.frame(), positionTypes = c('mean','orig'), testTypes=c('unif','norm','hots'), gp=list(), outpdf=F,myprint=F, debug=F, verbose=F) {
+  
+  #  if (defined(gp$minpval) == F) {
+  #    gp$minpval = 0.05
+  #  }
+  
+  do_distributionTests.get_outpdf = function(positionTypes=positionTypes,testTypes=testTypes,gp=gp,outpdf=outpdf) {
+    if (outpdf == F) {
+      outpdf = paste(paste(positionTypes,sep='_',collapse='_'),'_',paste(testTypes,sep='_',collapse='_'),'.pdf',collapse='',sep='')
+      print(outpdf)
+      if (defined(gp$mytitle)) {
+        outpdf = paste(gp$mytitle,'_',outpdf,sep='')
+      }
+      to_return = outpdf
+      return(to_return)
+    }
+  }
+  
+  outpdf = do_distributionTests.get_outpdf(outpdf=outpdf,gp=gp,positionTypes = positionTypes,testTypes=testTypes)
+  
+  if (verbose == T) {print(outpdf)}
+  
+  if (myprint == T) {pdf(outpdf)}
+  
+  misc = list(
+    p.plot = list(),
+    p.name = c(),
+    p.type = c(),
+    sig.coords = data.frame()
+  )
+  
+  # Loop through positionTypes
+  for (positionTypesInd in seq(1,length(positionTypes))) {
+    positionType      = positionTypes[positionTypesInd]
+    
+    positionTypePrint = if (positionType == 'orig') {''} else {positionType}
+    positionType1     = paste(positionTypePrint,'beg',sep='')
+    positionType2     = paste(positionTypePrint,'end',sep='')
+    posTypes = c(positionType1,positionType2)
+    
+    misc[[positionType]] = list(
+      positionType1 = positionType1,
+      positionType2 = positionType2,
+      p.plot = list(),
+      p.name = c(),
+      sig.coords = data.frame()
+    )
+    
+    
+    # Loop through posTypes
+    for (posTypesInd in seq(1,length(posTypes))) {
+      posType1 = posTypes[posTypesInd]
+      posType2 = posType1
+      if (grepl("beg",posType2)) {
+        posType2 = gsub("beg","end",posType2,perl=T)
+      } else if (grepl("end",posType2)) {
+        posType2 = gsub("end","beg",posType2,perl=T)
+      }
+
+      df = df[order(df[,'cluster'],df[,posType1],df[,posType2]),]
+      
+      # Loop through testTypes
+      for (testTypesInd in seq(1,length(testTypes))) {
+        testType = testTypes[testTypesInd]
+        
+        misc[[positionType]][[testType]] = list(
+          p.plot = list(),
+          p.name = c(),
+          sig.coords = data.frame(),
+          last.i = 1,
+          curr.i = 1
+        )
+        
+        df2 = data.frame()
+        
+        clusters = myorder(unique(df$cluster))
+        misc[[positionType]][[testType]]$clusters = clusters
+        misc[[positionType]][[testType]]$p.type = c(misc$p.type,paste(posType1,'.',testType,'.pval',sep=''))
+        
+        p.type = misc[[positionType]][[testType]]$p.type
+        
+        df[,p.type] = 0
+        
+        # Loop through clusters
+        for (clustersInd in seq(1,length(clusters))) {
+          cluster = as.character(clusters[clustersInd])
+          
+          misc[[positionType]][[testType]][[cluster]] = list(
+            p.plot = list(),
+            p.name = c(),
+            sig.coords = data.frame()
+          )
+          
+          dm = df[df$cluster == cluster,]
+          
+          # Get original min and max y-axis for that cluster
+          misc[[positionType]][[testType]][[cluster]]$min.y = min(dm$y)
+          misc[[positionType]][[testType]][[cluster]]$max.y = max(dm$y)
+          
+          dm = dm[order(dm$cluster,dm[,posType1],dm[,posType2]),]; dm$y = seq(1,dim(dm)[1]);# = reorder_y(dm)
+          
+          # Get min and max i for that cluster
+          min.i = 1
+          max.i = dim(dm)[1]
+          
+          # Initialize p-value of p.type
+          dm[,p.type] = 0
+          
+          
+          # Get min y-axis for that cluster (to be added later)
+          
+          dm = dm[order(dm$cluster,dm[,posType1],dm[,posType2]),]; dm$y = seq(1,dim(dm)[1]);# = reorder_y(dm)
+ 
+          dm.temp.draw   = dm
+          dm.temp.draw$x = dm[,posType1]
+          
+          p = ggplot(dm.temp.draw,aes(x=x,y=y)) +
+            geom_line(col='grey') +
+            coord_cartesian(xlim=c(0,3000),ylim=c(0,max(dm$y))) +
+            xlab(paste('R-loop',posType1,'position')) + ylab(pasta('Read',posType1,'Number')) +
+            ggtitle(paste(testType,'cluster',cluster,'; minpval',gp$minpval))
+          
+          ##############
+          # BIG LOOP 
+          # Loop Start
+          # - start at i = 1 until i = myrange; myrange = min(i+window or dim(dm)[1])
+          # - check p-value by testType (unif, hots, norm, etc)
+          #   - if p-value is bigger than pval threshold (gp$minpval), extend and increase pval threshold (+ 1% each iteration) 
+          #     until it isn't, then next i jumps to myrange + 1
+          #   - else, return and i = i + 1
+          
+          curr.i = 1
+          last.i = 1
+          
+          while (curr.i < max.i) {
+            
+            # if verbose: if there was a jump bigger than N in curr.i, then print the positions
+            if (verbose == T & last.i != curr.i - 1) {
+              print(paste(positionType,testType,'cluster=',cluster,'last.i=',last.i,'curr.i=',curr.i))
+            }
+            
+            last.i = curr.i
+            
+            myrange = list(
+              i0  = curr.i,
+              i1  = min(curr.i + gp$windowdist, max.i),
+              add = 0,
+              p   = 0,
+              minpval = gp$minpval, #0.25
+              minpval2 = gp$minpval2 #0.5
+            )
+            myrange$seq  = seq(myrange$i0, myrange$i1)
+            myrange$size = length(myrange$seq)
+            
+            # iterate from i0 to i1 (see myrange above)
+            # if p-value is bigger than pval threshold (gp$myrange$minpval), extend myrange and increase pval threshold (+ 1% each iteration)
+            # else return curr.i = i + 1
+            while (1) {
+              if (verbose == T) {cat('  -',myrange$i0,myrange$i1,myrange$add,myrange$p,'\n')}
+              myrange$p = 0
+              dm2 = dm[myrange$seq,]
+              
+              
+              # check each test
+              if (size(dm[myrange$seq,]) >= gp$dist.test_min.length) {
+                if (testType == 'unif') {
+                  if (length(unique(dm[myrange$seq,][,posType1])) >= gp$dist.test_min.unique) {
+                    myrange$hist = hist(dm[myrange$seq,posType1],plot=F,breaks = max(2,sqrt(dim(dm[myrange$seq,][,])[1])))
+                    myrange$p = uniform.test(myrange$hist)$p.value
+                  }
+                } else if(testType == 'norm') {
+                  if (length(unique(dm[myrange$seq,][,posType1])) >= gp$dist.test_min.unique) {
+                    myrange$p = shapiro.test(dm[myrange$seq,posType1])$p.value
+                  }
+                }
+                else if (testType == 'hots') {
+                  if (length(unique(dm[myrange$seq,][,posType1])) < gp$dist.test_max.unique.hots) {
+                    myrange$p = 1
+                  }
+                }
+              }
+              
+              dm[myrange$seq,p.type] = apply(data.frame(dm[myrange$seq, p.type],rep(myrange$p, myrange$size)),1,max)
+              
+              myrange$minpval = min(1,myrange$minpval + 1/100)
+              
+              if (myrange$p >= myrange$minpval) {
+                myrange$add = myrange$add + 1
+              } else {
+                break
+              }
+              
+              myrange$i1 = min(myrange$i1 + myrange$add, max.i)
+              myrange$seq = seq(myrange$i0, myrange$i1)
+              myrange$size = length(myrange$seq)
+              if (myrange$i1 >= max.i) {break}
+            }
+            
+            # if the region passed pvalue threshold and extended by "myrange$add", then add that to the curr.i
+            if (myrange$add > 0) {
+              ibefore = myrange$i0
+              curr.i = myrange$i1
+              
+              misc[[positionType]][[testType]][[cluster]]$sig.coords = rbind (
+                misc[[positionType]][[testType]][[cluster]]$sig.coords,
+                data.frame(positionType = posType1,
+                           testType=testType,
+                           cluster=cluster,
+                           x0end=min(dm[seq(myrange$i0,myrange$i1),posType1]),
+                           y0end=min(dm[seq(myrange$i0,myrange$i1),posType2]),
+                           x1beg=max(dm[seq(myrange$i0,myrange$i1),posType1]),
+                           y1beg=max(dm[seq(myrange$i0,myrange$i1),posType2]),
+                           y0=myrange$i0,
+                           y1=myrange$i1,
+                           x=100,y=myrange$i0,xmin=100,xmax=150)
+              )
+
+              # Add to debug drawing
+              # get color            
+              myrange$col = dist.test_get.color(myrange$p,gp)
+              dm.to_draw = data.frame(x=dm[myrange$seq,posType1] + gp$divby,y=dm[myrange$seq,]$y)
+              p = p + geom_line(data=dm.to_draw,aes(x=x,y=y),color=myrange$col,lwd=0.5)
+             
+            }
+            
+            # if current i is at max i - 1, then break (can't test if i == max.i as there'll only be 1 point)
+            if (curr.i >= max.i - 1) {
+              
+              # add rectangles to p
+              p = p + geom_rect(
+                data = misc[[positionType]][[testType]][[cluster]]$sig.coords,
+                aes(xmin=xmin,xmax=xmax,ymin=y0,ymax=y1),
+                fill='red4',color=NA
+              )
+              
+              #append(
+              #  misc[[positionType]][[testType]][[cluster]]p.plot,print(p))
+              #append(misc[[positionType]][[testType]][[cluster]]$p.plot, print(p))
+              misc[[positionType]][[testType]][[cluster]]$p.name = p.type
+              
+              break
+            }
+            
+            curr.i = curr.i + 1
+            
+          }
+          
+          #
+          ########################## Loop End
+          
+          df2 = rbind(df2,dm)
+          misc[[positionType]][[testType]][[cluster]]$sig.coords$y0 = misc[[positionType]][[testType]][[cluster]]$sig.coords$y0 + misc[[positionType]][[testType]][[cluster]]$min.y
+          misc[[positionType]][[testType]][[cluster]]$sig.coords$y1 = misc[[positionType]][[testType]][[cluster]]$sig.coords$y1 + misc[[positionType]][[testType]][[cluster]]$min.y
+          misc[[positionType]][[testType]]$sig.coords = rbind(
+            misc[[positionType]][[testType]]$sig.coords,
+            misc[[positionType]][[testType]][[cluster]]$sig.coords
+          )
+        }
+        
+        if (dim(df)[1] != dim(df2)[1] | dim(df)[2] != dim(df2)[2]) {
+          print(paste("Error! Size of df isn't same as size of df2!",paste(dim(df),collapse='_'),paste(dim(df2),collapse='_'),collapse='_'))
+        }
+        df2 = df2[order(df2[,'cluster'],df2[,posType1],df2[,posType2]),]; df2$y = seq(1,size(df2))
+        
+        #df[df2[,p.type] != 0,p.type] = df2[df2[,p.type] != 0,p.type]# = cbind(df,df2[,dim(df2)[2]]); colnames(df)[dim(df)[2]] = colnames(df2)[dim(df2)[2]]
+        df[,p.type] = apply(data.frame(df[, p.type],df2[,p.type]),1,max)
+        misc[[positionType]]$sig.coords = rbind(
+          misc[[positionType]]$sig.coords,
+          misc[[positionType]][[testType]]$sig.coords
+        )
+      }
+    }
+    misc$sig.coords = rbind(
+      misc$sig.coords,
+      misc[[positionType]]$sig.coords
+    )
+  }
+  to_return = list(df=df, misc=misc)
+  return(to_return)
+}
+#geom_histogram(aes(y=..density..,color=af(meanbeg.unif.sig.coords)),lwd=0.1,fill=NA,binwidth = 5) + facet_grid(cluster~.) +
+#  geom_density(aes(color=af(cluster))) + theme_bw() + coord_cartesian(xlim=c(0,3000)) + facet_grid(meanbeg.unif.sig.coords~.) +
+#  geom_density(aes(color=af(cluster))) + theme_bw() + coord_cartesian(xlim=c(0,3000)) + facet_grid(meanbeg.unif.sig.coords~.) +
+#  geom_density(aes(color=af(cluster),fill=af(meanbeg.unif.sig.coords)),alpha=0.1) + theme_bw() + coord_cartesian(xlim=c(0,3000)) +
+#  geom_histogram(aes(y=..density..,color=af(meanbeg.unif.sig.coords)),lwd=0.1,fill=NA,binwidth = 5) +
+#  geom_density(aes(color=af(meanbeg.unif.sig.coords))) + theme_bw() + coord_cartesian(xlim=c(0,3000)) +
+
+annot.pvar = function(mydf,mysc=data.frame()) {
+  mydf = mydf[order(mydf$cluster,mydf$meanbeg, mydf$meanend),]; mydf$y = seq(1,dim(mydf)[1])
+  for (positionTypesInd in seq(1,length(positionTypes))) {
+    positionType      = positionTypes[positionTypesInd]
+    
+    positionTypePrint = if (positionType == 'orig') {''} else {positionType}
+    positionType1     = paste(positionTypePrint,'beg',sep='')
+    positionType2     = paste(positionTypePrint,'end',sep='')
+    
+    posTypes = c(positionType1,positionType2)
+    for (posTypesInd in seq(1,length(posTypes))) {
+      posType1 = posTypes[posTypesInd]
+      posType2 = posType1
+      if (grepl("beg",posType2)) {
+        posType2 = gsub("beg","end",posType2,perl=T)
+      } else if (grepl("end",posType2)) {
+        posType2 = gsub("end","beg",posType2,perl=T)
+      }
+      mydf = mydf[order(mydf[,'cluster'],mydf[,posType1],mydf[,posType2]),]
+      mydf$y = seq(1,dim(mydf)[1])
+      
+      
+      for (testTypesInd in seq(1,size(testTypes))) {
+        testType = testTypes[testTypesInd]
+        pval.varname = paste(posType1,'.',testType,'.pval',sep='')
+        varname = paste(posType1,'.',testType,'.sig.coords',sep='')
+        print(varname)
+        mydf[,varname] = 0
+        d1 = print(defined(mysc[mysc$positionType == posType1,]$testType))
+        d2 = print(defined(mysc[mysc$positionType == posType1 & mysc$testType == testType,]$testType))
+        #if (d1 == TRUE & d2 == TRUE) {
+        if (defined(mysc[mysc$positionType == posType1 & mysc$testType == testType,]$testType)) {
+          mysc.sub = mysc[mysc$positionType == posType1 & mysc$testType == testType,]
+          for (i in seq(1,dim(mysc.sub)[1])) {
+            mydf[mydf$y >= mysc.sub$y0[i] & mydf$y <= mysc.sub$y1[i],varname] = 1
+            #mydf[mydf[,pval.varname] < 0.5,varname] = 0
+            
+            if (testType == 'unif' & posType1 == 'meanbeg') {
+              print(paste(posType1,testType,i,mysc.sub$y0[i],mysc.sub$y1[i]))
+            }
+          }
+        }
+      }
+    }
+  }
+  return(mydf)  
+}
+
+re.sc = function(mydf,mysc=data.frame()) {
+  mydf = mylist$df
+  mysc = mylist$misc$sig.coords
+  
+  mydf = mydf[order(mydf$cluster,mydf$meanbeg, mydf$meanend),]; mydf$y = seq(1,dim(mydf)[1])
+  for (positionTypesInd in seq(1,length(positionTypes))) {
+    positionType      = positionTypes[positionTypesInd]
+    
+    positionTypePrint = if (positionType == 'orig') {''} else {positionType}
+    positionType1     = paste(positionTypePrint,'beg',sep='')
+    positionType2     = paste(positionTypePrint,'end',sep='')
+    
+    posTypes = c(positionType1,positionType2)
+    for (posTypesInd in seq(1,length(posTypes))) {
+      posType1 = posTypes[posTypesInd]
+      posType2 = posType1
+      if (grepl("beg",posType2)) {
+        posType2 = gsub("beg","end",posType2,perl=T)
+      } else if (grepl("end",posType2)) {
+        posType2 = gsub("end","beg",posType2,perl=T)
+      }
+      mydf = mydf[order(mydf[,'cluster'],mydf[,posType1],mydf[,posType2]),]
+      mydf$y = seq(1,dim(mydf)[1])
+      
+      
+      for (testTypesInd in seq(1,size(testTypes))) {
+        testType = testTypes[testTypesInd]
+        pval.varname = paste(posType1,'.',testType,'.pval',sep='')
+        varname = paste(posType1,'.',testType,'.sig.coords',sep='')
+        print(varname)
+        mydf[,varname] = 0
+        d1 = print(defined(mysc[mysc$positionType == posType1,]$testType))
+        d2 = print(defined(mysc[mysc$positionType == posType1 & mysc$testType == testType,]$testType))
+        #if (d1 == TRUE & d2 == TRUE) {
+        if (defined(mysc[mysc$positionType == posType1 & mysc$testType == testType,]$testType)) {
+          mysc.sub = mysc[mysc$positionType == posType1 & mysc$testType == testType,]
+          for (i in seq(1,dim(mysc.sub)[1])) {
+            mydf[mydf$y >= mysc.sub$y0[i] & mydf$y <= mysc.sub$y1[i],varname] = 1
+            #mydf[mydf[,pval.varname] < 0.5,varname] = 0
+            
+            if (testType == 'unif' & posType1 == 'meanbeg') {
+              print(paste(posType1,testType,i,mysc.sub$y0[i],mysc.sub$y1[i]))
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  mydf = mydf[order(mydf$cluster,mydf$meanbeg, mydf$meanend),]; mydf$y = seq(1,dim(mydf)[1])
+  for (positionTypesInd in seq(1,length(positionTypes))) {
+    positionType      = positionTypes[positionTypesInd]
+    
+    positionTypePrint = if (positionType == 'orig') {''} else {positionType}
+    positionType1     = paste(positionTypePrint,'beg',sep='')
+    positionType2     = paste(positionTypePrint,'end',sep='')
+    
+    posTypes = c(positionType1,positionType2)
+    for (posTypesInd in seq(1,length(posTypes))) {
+      posType1 = posTypes[posTypesInd]
+      posType2 = posType1
+      if (grepl("beg",posType2)) {
+        posType2 = gsub("beg","end",posType2,perl=T)
+      } else if (grepl("end",posType2)) {
+        posType2 = gsub("end","beg",posType2,perl=T)
+      }
+      mydf = mydf[order(mydf[,'cluster'],mydf[,posType1],mydf[,posType2]),]
+      mydf$y = seq(1,dim(mydf)[1])
+      
+      
+      pval.varname.best = paste(posType1,'.pval.best',sep='')
+      varname.best = paste(posType1,'sig.coords.best',sep='')
+      testdm = data.frame()
+      varnames = c()
+      #   testdm.name = data.frame()
+      for (testTypesInd in seq(1,size(testTypes))) {
+        testType = testTypes[testTypesInd]
+        pval.varname = paste(posType1,'.',testType,'.pval',sep='')
+        varname = paste(posType1,'.',testType,'.sig.coords',sep='')
+        varnames = c(varnames,varname)
+        if (testTypesInd == 1) {
+          testdm = data.frame(varname=mydf[,pval.varname])
+        } else {
+          testdm = cbind(testdm,data.frame(varname=mydf[,pval.varname]))
+        }
+        #      testdm.name = rbind(testdm.name,varname)
+      }
+      colnames(testdm) = paste(posType1,'.',testTypes,'.sig.coords',sep='')
+      mydf[,pval.varname.best] = apply(testdm,1,max)
+      mydf[,varname.best] = apply(testdm,1,function(x) {varnames[x == max(x)]})
+      
+      
+    }
+  }
+  
+  for (positionTypesInd in seq(1,length(positionTypes))) {
+    positionType      = positionTypes[positionTypesInd]
+    
+    positionTypePrint = if (positionType == 'orig') {''} else {positionType}
+    positionType1     = paste(positionTypePrint,'beg',sep='')
+    positionType2     = paste(positionTypePrint,'end',sep='')
+    
+    posTypes = c(positionType1,positionType2)
+    for (posTypesInd in seq(1,length(posTypes))) {
+      posType1 = posTypes[posTypesInd]
+      posType2 = posType1
+      if (grepl("beg",posType2)) {
+        posType2 = gsub("beg","end",posType2,perl=T)
+      } else if (grepl("end",posType2)) {
+        posType2 = gsub("end","beg",posType2,perl=T)
+      }
+      mydf = mydf[order(mydf[,'cluster'],mydf[,posType1],mydf[,posType2]),]
+      mydf$y = seq(1,dim(mydf)[1])
+      
+      
+      pval.varname.best = paste(posType1,'.pval.best',sep='')
+      varname.best = paste(posType1,'sig.coords.best',sep='')
+      #   testdm.name = data.frame()
+      for (testTypesInd in seq(1,size(testTypes))) {
+        testType = testTypes[testTypesInd]
+        pval.varname = paste(posType1,'.',testType,'.pval',sep='')
+        varname = paste(posType1,'.',testType,'.sig.coords',sep='')
+        mydf[mydf[,pval.varname] != mydf[,pval.varname.best],varname] = 0
+        mydf[mydf[,pval.varname] != mydf[,pval.varname.best],pval.varname] = 0
+      }
+    }
+  }
+  
+  head(mydf)
+  #             
+  #       d1 = print(defined(mysc[mysc$positionType == posType1,]$testType))
+  #       d2 = print(defined(mysc[mysc$positionType == posType1 & mysc$testType == testType,]$testType))
+  #       #if (d1 == TRUE & d2 == TRUE) {
+  #       if (defined(mysc[mysc$positionType == posType1 & mysc$testType == testType,]$testType)) {
+  #         mysc.sub = mysc[mysc$positionType == posType1 & mysc$testType == testType,]
+  #         for (i in seq(1,dim(mysc.sub)[1])) {
+  #           mydf[mydf$y >= mysc.sub$y0[i] & mydf$y <= mysc.sub$y1[i],varname] = 1
+  #           #mydf[mydf[,pval.varname] < 0.5,varname] = 0
+  #           
+  #           if (testType == 'unif' & posType1 == 'meanbeg') {
+  #             print(paste(posType1,testType,i,mysc.sub$y0[i],mysc.sub$y1[i]))
+  #           }
+  #         }
+  #       }
+  #     }
+  #   }
+  # }
+  
+  #test5 = c(seq(1, 50), 25,26,27,28,29,30,seq(100, 150))
+  findedge = function(x) {
+    
+    # Find the edges
+    edges <- which(abs(diff(x)) > 1)
+    if (!0 %in% edges) {
+      edges = c(0,edges)
+    }
+    if (!size(x) %in% edges) {
+      edges = c(edges,size(x))
+    }
+    return(edges)
+  }
+  
+  #myscbackup = mysc
+  #mysc = myscbackup
+  mysc = data.frame()
+  
+  mydf = mydf[order(mydf$cluster,mydf$meanbeg, mydf$meanend),]; mydf$y = seq(1,dim(mydf)[1])
+  
+  test6 = mydf[mydf$meanbeg.unif.sig.coords != 0,]
+  myedge6 = findedge(test6$y)
+  myseq6 = data.frame()
+  for (i in 1:(size(myedge6)-1)) {
+    myseq6 = rbind(myseq6,
+                   data.frame(
+                     positionType = 'meanbeg',
+                     testType = 'unif',
+                     cluster = test6[myedge6[i]+1,]$cluster,
+                     x0end=test6[myedge6[i]+1,]$meanbeg,
+                     y0end=test6[myedge6[i]+1,]$meanend,
+                     x1beg=test6[myedge6[i+1],]$meanbeg,
+                     y1beg=test6[myedge6[i+1],]$meanend,
+                     y0 = test6[myedge6[i]+1,]$y,
+                     y1 = test6[myedge6[i+1],]$y,
+                     xmin = 0, xmax=25, x = 0, y = 0
+                     
+                   )
+    )
+    i = i + 1
+  }
+  #mysc = mysc[mysc$positionType != 'meanbeg' & mysc$testType != 'unif',]
+  mysc = rbind(mysc,myseq6)
+  
+  test6 = mydf[mydf$meanbeg.norm.sig.coords != 0,]
+  myedge6 = findedge(test6$y)
+  myseq6 = data.frame()
+  for (i in 1:(size(myedge6)-1)) {
+    myseq6 = rbind(myseq6,
+                   data.frame(
+                     positionType = 'meanbeg',
+                     testType = 'norm',
+                     cluster = test6[myedge6[i]+1,]$cluster,
+                     x0end=test6[myedge6[i]+1,]$meanbeg,
+                     y0end=test6[myedge6[i]+1,]$meanend,
+                     x1beg=test6[myedge6[i+1],]$meanbeg,
+                     y1beg=test6[myedge6[i+1],]$meanend,
+                     y0 = test6[myedge6[i]+1,]$y,
+                     y1 = test6[myedge6[i+1],]$y,
+                     xmin = 50, xmax=75, x = 0, y = 0
+                     
+                   )
+    )
+    i = i + 1
+  }
+  #mysc = mysc[mysc$positionType != 'meanbeg' & mysc$testType != 'norm',]
+  mysc = rbind(mysc,myseq6)
+  
+  test6 = mydf[mydf$meanbeg.hots.sig.coords != 0,]
+  myedge6 = findedge(test6$y)
+  myseq6 = data.frame()
+  for (i in 1:(size(myedge6)-1)) {
+    myseq6 = rbind(myseq6,
+                   data.frame(
+                     positionType = 'meanbeg',
+                     testType = 'hots',
+                     cluster = test6[myedge6[i]+1,]$cluster,
+                     x0end=test6[myedge6[i]+1,]$meanbeg,
+                     y0end=test6[myedge6[i]+1,]$meanend,
+                     x1beg=test6[myedge6[i+1],]$meanbeg,
+                     y1beg=test6[myedge6[i+1],]$meanend,
+                     y0 = test6[myedge6[i]+1,]$y,
+                     y1 = test6[myedge6[i+1],]$y,
+                     xmin = 100, xmax=125, x = 0, y = 0
+                     
+                   )
+    )
+    i = i + 1
+  }
+  #mysc = mysc[mysc$positionType != 'meanbeg' & mysc$testType != 'hots',]
+  mysc = rbind(mysc,myseq6)
+  
+  
+  #meanend
+  mydf = mydf[order(mydf$cluster,mydf$meanend, mydf$meanbeg),]; mydf$y = seq(1,dim(mydf)[1])
+  
+  test6 = mydf[mydf$meanend.unif.sig.coords != 0,]
+  myedge6 = findedge(test6$y)
+  myseq6 = data.frame()
+  for (i in 1:(size(myedge6)-1)) {
+    myseq6 = rbind(myseq6,
+                   data.frame(
+                     positionType = 'meanend',
+                     testType = 'unif',
+                     cluster = test6[myedge6[i]+1,]$cluster,
+                     x0end=test6[myedge6[i]+1,]$meanend,
+                     y0end=test6[myedge6[i]+1,]$meanbeg,
+                     x1beg=test6[myedge6[i+1],]$meanend,
+                     y1beg=test6[myedge6[i+1],]$meanbeg,
+                     y0 = test6[myedge6[i]+1,]$y,
+                     y1 = test6[myedge6[i+1],]$y,
+                     xmin = 0, xmax=25, x = 0, y = 0
+                     
+                   )
+    )
+    i = i + 1
+  }
+  #mysc = mysc[mysc$positionType != 'meanend' & mysc$testType != 'unif',]
+  mysc = rbind(mysc,myseq6)
+  
+  test6 = mydf[mydf$meanend.norm.sig.coords != 0,]
+  myedge6 = findedge(test6$y)
+  myseq6 = data.frame()
+  for (i in 1:(size(myedge6)-1)) {
+    myseq6 = rbind(myseq6,
+                   data.frame(
+                     positionType = 'meanend',
+                     testType = 'norm',
+                     cluster = test6[myedge6[i]+1,]$cluster,
+                     x0end=test6[myedge6[i]+1,]$meanend,
+                     y0end=test6[myedge6[i]+1,]$meanbeg,
+                     x1beg=test6[myedge6[i+1],]$meanend,
+                     y1beg=test6[myedge6[i+1],]$meanbeg,
+                     y0 = test6[myedge6[i]+1,]$y,
+                     y1 = test6[myedge6[i+1],]$y,
+                     xmin = 50, xmax=75, x = 0, y = 0
+                     
+                   )
+    )
+    i = i + 1
+  }
+  #mysc = mysc[mysc$positionType != 'meanend' & mysc$testType != 'norm',]
+  mysc = rbind(mysc,myseq6)
+  
+  test6 = mydf[mydf$meanend.hots.sig.coords != 0,]
+  if (size(test6) > 0) {
+    myedge6 = findedge(test6$y)
+    myseq6 = data.frame()
+    for (i in 1:(size(myedge6)-1)) {
+      myseq6 = rbind(myseq6,
+                     data.frame(
+                       positionType = 'meanend',
+                       testType = 'hots',
+                       cluster = test6[myedge6[i]+1,]$cluster,
+                       x0end=test6[myedge6[i]+1,]$meanend,
+                       y0end=test6[myedge6[i]+1,]$meanbeg,
+                       x1beg=test6[myedge6[i+1],]$meanend,
+                       y1beg=test6[myedge6[i+1],]$meanbeg,
+                       y0 = test6[myedge6[i]+1,]$y,
+                       y1 = test6[myedge6[i+1],]$y,
+                       xmin = 100, xmax=125, x = 0, y = 0
+                       
+                     )
+      )
+      i = i + 1
+    }
+    #mysc = mysc[mysc$positionType != 'meanend' & mysc$testType != 'hots',]
+    mysc = rbind(mysc,myseq6)
+    
+  }#myscbackup = mysc
+  # mysc = mysc[mysc$positionType != 'meanend' & mysc$testType != 'unif',]
+  # mysc = rbind(mysc,myseq6)
+  return(mysc)
 }
 
 CLUSTFILES  = myorder(paste('resources/misc/',dir("./resources/misc/","*final*.RDS"),sep=''))
