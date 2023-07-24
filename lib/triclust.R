@@ -1,29 +1,9 @@
-setwd("D:/cygwin64/home/mitochy/INVITRO")
+setwd("D:/cygwin64/home/mitochy/Work/Project/Ethan/footStoch/")
 library(plotly)
 library(grid)
 library(ggplot2)
 library(gridExtra)
 
-beds = data.frame()
-if (file.exists("annotation.bed")) {
-  beds = read.table("annotation.bed",sep="\t")
-  colnames(beds)[1:6] = c("gene","beg","end","feature","val","strand")
-}
-
-get_mybeds = function(beds, currgene) {
-  mybeds = data.frame()
-  for (bedsInd in 1:dim(beds)[1]) {
-    currbeds = beds[bedsInd,]
-    if (length(grep(currbeds$gene,currgene,ignore.case=TRUE)) > 0) {
-      if (length(grep("ApaLI",currbeds$gene,ignore.case=TRUE)) > 0 & length(grep("ApaLI",currgene,ignore.case=TRUE)) > 0) {
-        mybeds = rbind(mybeds,currbeds)
-      } else if (length(grep("ApaLI",currbeds$gene,ignore.case=TRUE)) == 0 & length(grep("ApaLI",currgene,ignore.case=TRUE)) == 0) {
-        mybeds = rbind(mybeds,currbeds)
-      }
-    }
-  }
-  return(mybeds)
-}
 get_genes = function(files, filesInd) {
   file = files[filesInd]
   filename = basename(file)
@@ -38,20 +18,20 @@ get_genes = function(files, filesInd) {
   genes = unique(df0$chr)
   return(genes)
 }
-get_mytitle = function(genes, geneWant,mytreatWant,filename) {
-  for (i in 1:length(genes)) {
-    if (genes[i] == geneWant) {
-      genesInd = i
-    }
-  }
-  currgene = genes[genesInd]
-  
-  mybeds = get_mybeds(beds, currgene)
-  
-  
-  mytitle = paste(filename,"_gene",genes[genesInd],"_desc",mytreatWant,sep="")
-  return(mytitle)
-}
+# get_mytitle = function(genes, geneWant,mytreatWant,filename) {
+#   for (i in 1:length(genes)) {
+#     if (genes[i] == geneWant) {
+#       genesInd = i
+#     }
+#   }
+#   currgene = genes[genesInd]
+#   
+#   bed = get_bed(BEDS, currgene)
+#   
+#   
+#   mytitle = paste(filename,"_gene",genes[genesInd],"_desc",mytreatWant,sep="")
+#   return(mytitle)
+# }
 get_dm2 = function(files,filesInd, genes, geneWant) {
   for (i in 1:length(genes)) {
     if (genes[i] == geneWant) {
@@ -74,7 +54,7 @@ get_dm2 = function(files,filesInd, genes, geneWant) {
   df0 = df0[order(df0$beg, df0$end),]
   df0$file = "DUMMY"
   
-  mybeds = get_mybeds(beds, currgene)
+  bed = get_bed(BEDS, currgene)
   
   df = df0[df0$chr == genes[genesInd],]
   
@@ -122,13 +102,13 @@ get_dm2 = function(files,filesInd, genes, geneWant) {
   #   geom_segment(x=0,xend=3000,y=0,yend=3000) +
   #   ggtitle(paste(mytitle,"\nXY plot with no cluster (n=",dim(dm2)[1],")",sep=""))
   #
-  # if (dim(mybeds)[1] > 0) {
-  #   p3 = p3 + geom_line(data=mybeds,aes(x=beg,xend=beg,y=0,yend=end),lty=2,color=rgb(1,1,1,0.5)) +
-  #     geom_line(data=mybeds,aes(x=end,xend=end,y=0,yend=end),lty=2,color=rgb(1,1,1,0.5)) +
-  #     geom_line(data=mybeds,aes(y=beg,yend=beg,x=0,xend=end),lty=2,color=rgb(1,1,1,0.5)) +
-  #     geom_line(data=mybeds,aes(y=end,yend=end,x=0,xend=end),lty=2,color=rgb(1,1,1,0.5)) +
-  #     geom_text(data=mybeds,aes(x=(beg+end)/2,y=0,label=feature),size=2,vjust=0) +
-  #     geom_text(data=mybeds,aes(y=(beg+end)/2,x=0,label=feature),size=2,hjust=0)
+  # if (dim(bed)[1] > 0) {
+  #   p3 = p3 + geom_line(data=bed,aes(x=beg,xend=beg,y=0,yend=end),lty=2,color=rgb(1,1,1,0.5)) +
+  #     geom_line(data=bed,aes(x=end,xend=end,y=0,yend=end),lty=2,color=rgb(1,1,1,0.5)) +
+  #     geom_line(data=bed,aes(y=beg,yend=beg,x=0,xend=end),lty=2,color=rgb(1,1,1,0.5)) +
+  #     geom_line(data=bed,aes(y=end,yend=end,x=0,xend=end),lty=2,color=rgb(1,1,1,0.5)) +
+  #     geom_text(data=bed,aes(x=(beg+end)/2,y=0,label=feature),size=2,vjust=0) +
+  #     geom_text(data=bed,aes(y=(beg+end)/2,x=0,label=feature),size=2,hjust=0)
   # }
   #
   #

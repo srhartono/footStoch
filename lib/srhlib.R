@@ -80,12 +80,17 @@ myorder = function(x,orderby=NA) {
 defined = function(mydata,direct=F,debug=F,verbose=F) {
   res = tryCatch(
     {
-      if (!any(is.na(mydata)) & !any(is.null(mydata)) & length(mydata)> 0) { # if there is any real value then return TRUE
-  # if (length(mydata) == 0) {
-        #   FALSE
-        # } else {
+      if (!any(is.na(mydata)) & !any(is.null(mydata)) & length(mydata)> 0) { 
+        # if there is any real value then return TRUE
+        if (is.data.frame(mydata)) {
+          if (dim(mydata)[1] == 0) {
+            FALSE
+          } else {
+            TRUE
+          }
+        } else {
           TRUE
-        # }
+        }
       } else if (length(mydata) == 0) {
         FALSE #if (direct == F) {FALSE} else {NULL}
       } else if (length(mydata[is.na(mydata)]) == length(mydata)) {
@@ -107,7 +112,7 @@ defined = function(mydata,direct=F,debug=F,verbose=F) {
       return(TRUE) #if (direct == F) {return(TRUE)} else {return(invisible(mydata))}
     }
   )
-  
+
   to_return = res
   if (direct == T) {
     if (is_false(res)) {

@@ -27,29 +27,35 @@ gp = list(
 )
 
 
-params = list(
-  gene     = 'T7_init_VR_18',
-  treat    = '^C$',
+myparams = list(
+  gene     = 'T7_init_VR_20',
+  treat    = 'C',
   peaktype = 'TOP',
   thres    = 0,
-  VR       = 18
+  VR       = 20
 )
-params_not_exact = c(F,T,F,F,F)
+myparams_regex = list(
+  gene = F,
+  treat = F,
+  peaktype = F,
+  thres = F,
+  VR = F
+)
 
-gp$mytitle = get_title(params=params)
+gp$mytitle = get_title(myparams=myparams)
 gp$mytitle.wrap = wrap_title(gp$mytitle,width = 40)
 gp$divby = triclust_get_divby(mytitle=gp$mytitle)$triclust.divby
 
 # Get BED and FA sequence
-myfa  = FASTAS[FASTAS$chr == params$gene,]
-mybed = BEDS[BEDS$chr == params$gene,]
+myfa  = FASTAS[FASTAS$chr == myparams$gene,]
+mybed = BEDS[BEDS$chr == myparams$gene,]
 myfa$amp.beg = mybed[mybed$feature == "FW_Barcode",]$beg
 myfa$amp.end = mybed[mybed$feature == "RV_Barcode",]$end
 myfa$amp.seq = gsub(paste('^.{',myfa$amp.beg,'}','.(.+)','.{',myfa$amp.end,'}','$'),"\\1",myfa$seq,perl=T)
 
 #myfa$seq = gsub()
 # Get PEAKS
-df = slice_df(PEAKS, params = params,params_not_exact=params_not_exact)
+df = slice_df(PEAKS, myparams = myparams,myparams_regex=myparams_regex)
 df$cluster = 1
 df$y = seq(1,dim(df)[1])
 
@@ -88,9 +94,12 @@ grid.arrange(p1.beg,p1.end,p2.beg,p2.end)
 
 
 # Get Cluster
-#dfclust = slice_CLUSTS(df,CLUSTS)
+dfclust = slice_CLUSTS(df,CLUSTS)
 #dfclustVR20 = dfclust
+
+# Get Cluster from VR20
 dfclust = dfclustVR20
+
 head(dfclust)
 df = get_cluster(df = df, dfclust = dfclust)
 
@@ -232,7 +241,7 @@ p4.meanend.c.mydf = ggplot(mydftemp.meanend,aes(end)) +
   scale_x_continuous(breaks=seq(0,3000,100)) +
   theme(legend.position = 'bottom') + ylab('density') + xlab('R-loop End Position (bp)')
 
-pdf(paste(gp$mytitle,'.pdf',sep=''),height=40,width=20)
+pdf(paste('./results/',gp$mytitle,'.pdf',sep=''),height=40,width=20)
 grid.arrange(p1.meanbeg.c.mydf,p1.meanend.c.mydf,
              p2.meanbeg.c.mydf,p2.meanend.c.mydf,
              p3.meanbeg.c.mydf,p3.meanend.c.mydf,

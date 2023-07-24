@@ -1,4 +1,4 @@
-ps = function(df,by,gp,p=NA,add=F,y.var = NA,params=list(),print=F,group='cluster') {
+ps = function(df,by,gp,p=NA,add=F,y.var = NA,myparams=list(),print=F,group='cluster') {
   temp = df
   bybeg = temp$beg
   byend = temp$end

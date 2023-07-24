@@ -264,16 +264,16 @@ parseMAINFile = function(gp,debug=F,verbose=F) {
   return(mylist)
 }
 
-get_title = function(mytitle='',params=list(),verbose=F,debug=F) {
+get_title = function(mytitle='',myparams=list(),verbose=F,debug=F) {
   
-  if (length(params) == 0) {
+  if (length(myparams) == 0) {
     
     return(mytitle)
   }
-  for (i in 1:length(params))  {
+  for (i in 1:length(myparams))  {
     
-    paramname = names(params)[i]
-    paramwant = params[i][[1]]
+    paramname = names(myparams)[i]
+    paramwant = myparams[i][[1]]
     if (mytitle != '') {
       
       mytitle = paste(mytitle,',',paramname,'_',paramwant,sep='')
@@ -299,22 +299,45 @@ wrap_title = function(mytitle='',width=10,verbose=F,debug=F) {
   return(to_return)
 }
 
-slice_df = function(mydata,params=list(),params_not_exact=c(),verbose=F,debug=F) {
+slice_bed = function(mybeds=BEDS,myparams=list(),myparams_regex=c(),genewant = NA,verbose=F,debug=F) {
+  if (is.na(genewant)) {
+    if (defined(myparams_regex$gene)) {
+      if (myparams_regex$gene == TRUE) {
+        mybed = mybeds[grep(myparams$gene,mybeds$gene,ignore.case = TRUE),]
+      } else {
+        mybed = mybeds[mybeds$gene == myparams$gene,]
+      }
+    } else {
+      mybed = mybeds[mybeds$gene == myparams$gene,]
+    }
+    if (defined(mybed) == FALSE) {
+      mybed = mybeds[grep(paste('^',myparams$gene,'$',sep=''),mybeds$gene,ignore.case = TRUE),]
+    }
+  } else {
+    mybed = mybeds[grep(paste('^',genewant,'$',sep=''),mybeds$gene),]
+    if (defined(mybed) == FALSE) {
+      mybed = mybeds[grep(paste('^',genewant,'$',sep=''),mybeds$gene,ignore.case = TRUE),]
+    }
+  }
+  return(mybed)
+}
+
+slice_df = function(mydata,myparams=list(),myparams_regex=list(),verbose=F,debug=F) {
 
   #gene.want='any',treat.want='any',peaktype.want='any',VR.want='any',thres.want='any',verbose=F,debug=F)
-  if (length(params) == 0) {
+  if (length(myparams) == 0) {
 
     return(mydata)
   }
-  for (i in 1:length(params))  {
+  for (i in 1:length(myparams))  {
 
     orig = mydata
-    paramname = names(params)[i]
-    paramwant = params[i][[1]]
-    not_exact = params_not_exact[i]
-    if (not_exact == TRUE) {
+    paramname = names(myparams)[i]
+    paramwant = myparams[i][[1]]
+    isregex = myparams_regex[i]
+    if (isregex == TRUE) {
 
-      cat(i,'. ',paramname,': ',paramwant,' (not_exact): \t',sep='')
+      cat(i,'. ',paramname,': ',paramwant,' (regex): \t',sep='')
     }
     else {
 
@@ -328,7 +351,7 @@ slice_df = function(mydata,params=list(),params_not_exact=c(),verbose=F,debug=F)
     }
 
     mydata = mydata[!is.na(mydata[,paramname]),]
-    if (not_exact == FALSE) {
+    if (isregex == FALSE) {
 
       mydata = mydata[mydata[,paramname] == paramwant,]
     }
