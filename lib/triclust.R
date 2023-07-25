@@ -374,6 +374,7 @@ mytreatwant = 8
 
 dm2 = dm1[dm1$treat == mytreatwant,]
 
+mytitle = g
 mytitle = get_mytitle(genes,genewant,mytreatwant,basename(files[filesInd]))
 mytitle = paste(mytitle,"\n(x & y border: ",-1 * border0,"/",plus,border1,")",sep="")
 
