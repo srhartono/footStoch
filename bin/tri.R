@@ -121,6 +121,8 @@ p2.end = ps(df,by='meanend',gp=gp,print=F,group='cluster')
 
 # Get Cluster
 dfclust = slice_CLUSTS(df,CLUSTS)
+#saveRDS(dfclust,file='dfclustVR20.RDS')
+dfclust = readRDS('dfclustVR20.RDS')
 #dfclustVR20 = dfclust
 # Get Cluster from VR20
 # 
@@ -156,7 +158,7 @@ dfclust = slice_CLUSTS(df,CLUSTS)
 # dfclust[dfclust$cluster == 1,]$x1beg = dfclust[dfclust$cluster == 1,]$x1beg + gp$divby
 # dfclust[dfclust$cluster == 2,]$y0end = dfclust[dfclust$cluster == 2,]$y0end + gp$divby
 
- dfclust = dfclustVR20
+# dfclust = dfclustVR20
 #dfclustVR20 = dfclust
 #head(dfclust)
 df = get_cluster(df = df, dfclust = dfclust)
@@ -367,7 +369,7 @@ p4.meanend.c.mydf = ggplot(mydftemp.meanend,aes(end)) +
   scale_color_manual(values=c('1'='red4','0'='orange','3'='blue4','2'='cornflowerblue')) +
   scale_x_continuous(breaks=seq(0,3000,100)) +
   theme(legend.position = 'bottom') + ylab('density') + xlab('R-loop End Position (bp)')
-
+# 
 pdf(paste('./results/',gp$mytitle,'.pdf',sep=''),height=50,width=20)
 grid.arrange(
   p0.meanbeg.c.mydf,p0.meanend.c.mydf,
@@ -380,10 +382,20 @@ grid.arrange(
 )
 dev.off()
 
-pdf('VR17_p2.pdf',height=10,width=10)
-grid.arrange(p2.meanbeg.c.mydf,p2.meanend.c.mydf,nrow=2,ncol=2)
+pdf(paste('./results/',gp$mytitle,'_meanbeg_heatmaponly.pdf',sep=''),height=10,width=10)
+print(p2.meanbeg.c.mydf)
 dev.off()
+pdf(paste('./results/',gp$mytitle,'_meanend_heatmaponly.pdf',sep=''),height=10,width=10)
+print(p2.meanend.c.mydf)
+dev.off()
+# 
+# pdf('VR17_p2.pdf',height=10,width=10)
+# grid.arrange(p2.meanbeg.c.mydf,p2.meanend.c.mydf,nrow=2,ncol=2)
+# dev.off()
 
+if (myVR == 1) {
+  myperc = data.frame()
+}
 df$count = 1
 dfcount = aggregate(df$count,by=list(df$cluster),sum)
 colnames(dfcount) = c('cluster','count')
@@ -441,7 +453,8 @@ ggplot(myperc[(myperc$VR >= 15 & myperc$VR <= 26) & myperc$cluster != -1,],aes(a
   theme(legend.position = 'bottom') + scale_fill_brewer(palette = 'Set3')                                    
 
 dev.off()
-pdf("cluster1to4.pdf",width=5,height=5)
+
+pdf("cluster_By_GCperc_GCskew_Gclustering.pdf",width=5,height=5)
 ggplot(myperc[myperc$VR >= 1 & myperc$VR <= 4 & myperc$cluster != -1,],aes(af(cluster),perc)) +
   geom_bar(aes(fill=af(VR)),stat='identity',position='dodge',color='black') +
   theme_bw() + xlab('Cluster') + ylab('Percent (%)') +
@@ -458,6 +471,128 @@ ggplot(myperc[(myperc$VR >= 15 & myperc$VR <= 18) & myperc$cluster != -1,],aes(a
   coord_cartesian(ylim=c(0,100)) + ggtitle('% Rloop Peak Distribution\nat VR #15-21') +
   theme(legend.position = 'right') + scale_fill_brewer(palette = 'Set3')                                    
 dev.off()
+
+myperc3 = myperc[(myperc$cluster >= 1 & myperc$cluster <= 3) | myperc$cluster == 6,]
+myperc2 = aggregate(myperc3$count,by=list(myperc3$VR),sum)
+colnames(myperc2) = c('VR','total.in.VR')
+myperc3 = merge(myperc3,myperc2,by=c('VR'),all=T)
+myperc3$perc.in.VR = ai(myperc3$count / myperc3$total.in.VR * 1000 + 0.5)/10
+
+
+
+myperc4 = myperc[(myperc$cluster < 1 | myperc$cluster > 3) & myperc$cluster != 6,]
+myperc2 = aggregate(myperc4$count,by=list(myperc4$VR),sum)
+colnames(myperc2) = c('VR','total.out.VR')
+myperc4 = merge(myperc4,myperc2,by=c('VR'),all=T)
+myperc4$perc.out.VR = ai(myperc4$count / myperc4$total.out.VR * 1000 + 0.5)/10
+#myperc3[is.na(myperc3$total.out.VR),]$total.out.VR = 0
+
+
+
+pdf("cluster1to4.pdf",width=5,height=5)
+
+p1a = ggplot(myperc3[(myperc3$VR < 15 | myperc3$VR == 18  | myperc3$VR >= 27) & myperc3$VR != 31, ],aes(af(cluster),perc)) +
+  geom_bar(aes(fill=af(GCperc)),stat='identity',position='dodge',color='black') +
+  geom_text(aes(label=VR,y=0,group=GCperc),stat='identity',position=position_dodge(width=0.9),size=3,vjust=1) +
+  theme_bw() + xlab('Cluster') + ylab('Percent (%)') +
+  coord_cartesian(ylim=c(0,100)) +
+  facet_grid(.~af(GCskew)) +
+  theme(legend.position = 'bottom') + scale_fill_brewer(palette = 'Set3')                                    
+p1b = ggplot(myperc3[(myperc3$VR < 15 | myperc3$VR == 18  | myperc3$VR >= 27) & myperc3$VR != 31,],aes(af(cluster),perc.in.VR)) +
+  geom_bar(aes(fill=af(GCperc)),stat='identity',position='dodge',color='black') +
+  geom_text(aes(label=VR,y=0,group=GCperc),stat='identity',position=position_dodge(width=0.9),size=3,vjust=1) +
+  theme_bw() + ylab('Percent (%)') +
+  coord_cartesian(ylim=c(0,100)) +
+  facet_grid(.~af(GCskew)) +
+  theme(legend.position = 'bottom') + scale_fill_brewer(palette = 'Set3')                                    
+
+p1a = ggplot(myperc3[(myperc3$VR < 15 | myperc3$VR == 18  | myperc3$VR >= 27) & myperc3$VR != 31,],aes(af(GCperc),perc)) +
+  geom_bar(aes(fill=af(cluster)),stat='identity',position='dodge',color='black') +
+  geom_text(aes(label=VR,y=0,group=GCperc),stat='identity',position=position_dodge(width=0.9),size=3,vjust=1) +
+  theme_bw() + ylab('Percent (%)') +
+  coord_cartesian(ylim=c(0,100)) +
+  facet_grid(.~af(GCskew)) +
+  theme(legend.position = 'right') + scale_fill_brewer(palette = 'Set3')                                    
+p1b = ggplot(myperc3[(myperc3$VR < 15 | myperc3$VR == 18  | myperc3$VR >= 27) & myperc3$VR != 31,],aes(af(GCperc),perc.in.VR)) +
+  geom_bar(aes(fill=af(cluster)),stat='identity',position='dodge',color='black') +
+  geom_text(aes(label=VR,y=0,group=GCperc),stat='identity',position=position_dodge(width=0.9),size=3,vjust=1) +
+  theme_bw() +  ylab('Percent (%)') +
+  coord_cartesian(ylim=c(0,100)) +
+  facet_grid(.~af(GCskew)) +
+  theme(legend.position = 'right') + scale_fill_brewer(palette = 'Set3')       
+
+
+p1a = ggplot(myperc3[(myperc3$VR < 15 | myperc3$VR == 18  | myperc3$VR >= 27) & myperc3$VR != 31,],aes(group=af(GCperc),x=GCperc,y=perc)) +
+  geom_boxplot(aes(fill=af(GCperc)),outlier.shape = NA) +
+  facet_grid(.~af(cluster)) +
+  stat_summary(geom='point',fun=mean,aes(x=GCperc,color=af(GCperc))) +
+  stat_summary(geom='line',fun=mean,aes(group=1,x=GCperc),color='black') +#,color=af(GCperc))) +
+#  stat_summary(geom='boxplot') +#,aes(fun=mean)) +
+#  geom_bar(aes(fill=af(cluster)),stat='identity',position='dodge',color='black') +
+#  geom_text(aes(label=VR,y=0,group=af(GCperc)),stat='identity',position=position_dodge(width=0.9),size=3,vjust=1) +
+  theme_bw() + theme(panel.grid = element_blank()) +ylab('Percent (%)') +
+  coord_cartesian(ylim=c(0,100)) +
+  theme(legend.position = 'right') + 
+  scale_color_brewer(palette = 'Set2') +
+  scale_fill_brewer(palette = 'Set2')                                    
+
+p1b = ggplot(myperc3[(myperc3$VR < 15 | myperc3$VR == 18  | myperc3$VR >= 27) & myperc3$VR != 31,],aes(group=af(GCperc),x=GCperc,y=perc.in.VR)) +
+  geom_boxplot(aes(fill=af(GCperc)),outlier.shape = NA) +
+  facet_grid(.~af(cluster)) +
+  stat_summary(geom='point',fun=mean,aes(x=GCperc,color=af(GCperc))) +
+  stat_summary(geom='line',fun=mean,aes(group=1,x=GCperc),color='black') +#,color=af(GCperc))) +
+#  stat_summary(geom='boxplot') +#,aes(fun=mean)) +
+#  geom_bar(aes(fill=af(cluster)),stat='identity',position='dodge',color='black') +
+#  geom_text(aes(label=VR,y=0,group=af(GCperc)),stat='identity',position=position_dodge(width=0.9),size=3,vjust=1) +
+  theme_bw() + theme(panel.grid = element_blank()) +ylab('Percent (%)') +
+  coord_cartesian(ylim=c(0,100)) +
+  theme(legend.position = 'right') + 
+  scale_color_brewer(palette = 'Set2') +
+  scale_fill_brewer(palette = 'Set2')  
+
+p1c = ggplot(myperc4[(myperc4$VR < 15 | myperc4$VR == 18  | myperc4$VR >= 27) & myperc4$VR != 31,],aes(group=af(GCperc),x=GCperc,y=perc)) +
+  geom_boxplot(aes(fill=af(GCperc)),outlier.shape = NA) +
+  facet_grid(.~af(cluster)) +
+  stat_summary(geom='point',fun=mean,aes(x=GCperc,color=af(GCperc))) +
+  stat_summary(geom='line',fun=mean,aes(group=1,x=GCperc),color='black') +#,color=af(GCperc))) +
+#  stat_summary(geom='boxplot') +#,aes(fun=mean)) +
+#  geom_bar(aes(fill=af(cluster)),stat='identity',position='dodge',color='black') +
+#  geom_text(aes(label=VR,y=0,group=af(GCperc)),stat='identity',position=position_dodge(width=0.9),size=3,vjust=1) +
+  theme_bw() + theme(panel.grid = element_blank()) +ylab('Percent (%)') +
+  coord_cartesian(ylim=c(0,50)) +
+  theme(legend.position = 'right') + 
+  scale_color_brewer(palette = 'Set2') +
+  scale_fill_brewer(palette = 'Set2')  
+
+p1d = ggplot(myperc4[(myperc4$VR < 15 | myperc4$VR == 18  | myperc4$VR >= 27) & myperc4$VR != 31,],aes(group=af(GCperc),x=GCperc,y=perc.out.VR)) +
+  geom_boxplot(aes(fill=af(GCperc)),outlier.shape = NA) +
+  facet_grid(.~af(cluster)) +
+  stat_summary(geom='point',fun=mean,aes(x=GCperc,color=af(GCperc))) +
+  stat_summary(geom='line',fun=mean,aes(group=1,x=GCperc),color='black') +#,color=af(GCperc))) +
+#  stat_summary(geom='boxplot') +#,aes(fun=mean)) +
+#  geom_bar(aes(fill=af(cluster)),stat='identity',position='dodge',color='black') +
+#  geom_text(aes(label=VR,y=0,group=af(GCperc)),stat='identity',position=position_dodge(width=0.9),size=3,vjust=1) +
+  theme_bw() + theme(panel.grid = element_blank()) +ylab('Percent (%)') +
+  coord_cartesian(ylim=c(0,100)) +
+  theme(legend.position = 'right') + 
+  scale_color_brewer(palette = 'Set2') +
+  scale_fill_brewer(palette = 'Set2')  
+grid.arrange(p1a,p1b,p1c,p1d,ncol=2,nrow=2)
+
+Bprint('DONE')
+
+
+
+
+
+
+
+
+
+
+
+
+
 # + theme(axis.text.x=element_blank(),axis.ticks.x = element_blank())
 # 
 # test1 = mydftemp.meanbeg[mydftemp.meanbeg$meanbeg.unif.sig.coords == 1 & mydftemp.meanbeg$meanbeg.norm.sig.coords == 1 & mydftemp.meanbeg$cluster == 4,]

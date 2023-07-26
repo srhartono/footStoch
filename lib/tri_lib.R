@@ -735,7 +735,7 @@ annot.pvar = function(mydf,mysc=data.frame()) {
   return(mydf)  
 }
 
-re.sc = function(mydf,mysc=data.frame(),positionTypes,testTypes) {#,posTypeWant = 'beg') {
+re.sc = function(mydf,mysc,positionTypes,testTypes) {#,posTypeWant = 'beg') {
   #mydf = mylist$df
   #mysc = mylist$misc$sig.coords
   
