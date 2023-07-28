@@ -872,19 +872,7 @@ re.sc = function(mydf,mysc,positionTypes,testTypes) {#,posTypeWant = 'beg') {
   }
   
   head(mydf)
-  findedge = function(x) {
-    
-    # Find the edges
-    edges <- which(abs(diff(x)) > 1)
-    if (!0 %in% edges) {
-      edges = c(0,edges)
-    }
-    if (!size(x) %in% edges) {
-      edges = c(edges,size(x))
-    }
-    return(edges)
-  }
-  
+
   #myscbackup = mysc
   #mysc = myscbackup
   mysc = data.frame()

@@ -191,3 +191,15 @@ triclust_get_divby = function(dm4=data.frame(),mytitle=NA,gp=list()) {
   return(to_return)
 }
 
+findedge = function(x) {
+  
+  # Find the edges
+  edges <- which(abs(diff(x)) > 1)
+  if (!0 %in% edges) {
+    edges = c(0,edges)
+  }
+  if (!size(x) %in% edges) {
+    edges = c(edges,size(x))
+  }
+  return(edges)
+}

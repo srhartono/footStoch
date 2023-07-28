@@ -84,8 +84,7 @@ get_dm2 = function(file, gene) {
   return(dm)
 }
 
-get_dm3 = function(dm2, divby,threshold,useSD=0) {
-#  dm2temp = get_dm2b(dm2,divby,threshold)
+get_dm3 = function(dm2, divby,threshold,useSD=0,myverbose=F) {
   dm2 = dm2[order(dm2$beg,dm2$end),]
   begtotal = c()
   endtotal = c()
@@ -99,17 +98,34 @@ get_dm3 = function(dm2, divby,threshold,useSD=0) {
     begtotal[begI] = begtotal[begI] + 1
     endtotal[endI] = endtotal[endI] + 1
   }
+  minbegI = min(ai(dm2$beg/divby))
+  maxbegI = max(ai(dm2$beg/divby))
+  dm3return = data.frame(pos=c(minbegI,maxbegI),total=c(size(dm2),size(dm2)),type=c('beg','end'),mythres=threshold)
   dm2temp = data.frame(pos=ai(seq(1,5000/divby)),begtotal=begtotal,endtotal=endtotal)
-  begthreshold = max(1,sd(dm2temp$begtotal))
-  endthreshold = max(1,sd(dm2temp$endtotal))
-  #plot(density(dm2temp$begtotal));segments(sd(dm2temp$begtotal),0,sd(dm2temp$begtotal),1);segments(sd(dm2temp$begtotal*2),0,sd(dm2temp$begtotal*2),1)
-  #dm2temp[dm2temp$begtotal +dm2temp$endtotal > 0,]
+
   if (useSD == 1) {
-    dm2temp[dm2temp$begtotal < begthreshold,]$begtotal = 0
-    dm2temp[dm2temp$endtotal < endthreshold,]$endtotal = 0
-    dm2temp=dm2temp[dm2temp$begtotal >= begthreshold | dm2temp$endtotal >= endthreshold,]
+    begthreshold = max(1,sd(dm2temp$begtotal))
+    endthreshold = max(1,sd(dm2temp$endtotal))
+    #plot(density(dm2temp$begtotal));segments(sd(dm2temp$begtotal),0,sd(dm2temp$begtotal),1);segments(sd(dm2temp$begtotal*2),0,sd(dm2temp$begtotal*2),1)
+    #dm2temp[dm2temp$begtotal +dm2temp$endtotal > 0,]
+    if (defined(dm2temp[dm2temp$begtotal < begthreshold,])) {
+      dm2temp[dm2temp$begtotal < begthreshold,]$begtotal = 0
+    }
+    if (defined(dm2temp[dm2temp$endtotal < endthreshold,])) {
+      dm2temp[dm2temp$endtotal < endthreshold,]$endtotal = 0
+    }
+    if (defined(dm2temp[dm2temp$begtotal >= begthreshold | dm2temp$endtotal >= endthreshold,])) {
+      dm2temp=dm2temp[dm2temp$begtotal >= begthreshold | dm2temp$endtotal >= endthreshold,]
+    } else {
+      return(dm3return)
+    }
   } else {
     dm2temp = dm2temp[dm2temp$begtotal >= threshold | dm2temp$endtotal >= threshold,]
+    if (defined(dm2temp[dm2temp$begtotal >= threshold | dm2temp$endtotal >= threshold,])) {
+      dm2temp = dm2temp[dm2temp$begtotal >= threshold | dm2temp$endtotal >= threshold,]
+    } else {
+      return(dm3return)
+    }
   }
   
   #plot(density(dm2temp$begtotal));segments(sd(dm2temp$begtotal),0,sd(dm2temp$begtotal),1,col='orange');segments(sd(dm2temp$begtotal*2),0,sd(dm2temp$begtotal*2),1,col = 'red4')
@@ -118,63 +134,87 @@ get_dm3 = function(dm2, divby,threshold,useSD=0) {
   # last_begtotal = 0
   # last_begpos = -1
   
-  dm3 = dm2temp
-  for (i in seq(1,dim(dm3)[1],1)) {
-    if (i == 1) {dm3$begtotal = dm2temp$begtotal;  best_i = -1; last_pos = -1; last_begtotal = -1;}
-    curr_pos        = dm3$pos[i]
-    curr_begtotal   = dm3$begtotal[i]
-    if (curr_begtotal >= threshold & best_i == -1) {
-      best_i = i
-      last_pos      = dm3$pos[best_i]
-      last_begtotal = dm3$begtotal[best_i]
-    } else if (curr_begtotal < threshold) {
-      best_i = -1
-      last_pos = -1
-      last_begtotal = -1
-    } else if (curr_begtotal >= threshold & best_i != -1 & last_pos < curr_pos & last_pos >= curr_pos - 2) {
-      cat("i=",i,"currpos=",curr_pos,",best_i=",best_i,"bset_pos=",last_pos,"sum=",last_begtotal+curr_begtotal,"\n")
-      dm3$begtotal[best_i] = dm3$begtotal[best_i] + curr_begtotal
-      dm3$begtotal[i] = 0
-      best_i = best_i
-      last_pos      = dm3$pos[i]
-      last_begtotal = dm3$begtotal[best_i]
-    } else if (curr_begtotal >= threshold & best_i != -1 & last_pos < curr_pos - 2) {
-      best_i = i
-      last_pos      = dm3$pos[best_i]
-      last_begtotal = dm3$begtotal[best_i]
+  dm2temp[dm2temp$begtotal < threshold/2,]$begtotal = 0
+  dm2temp[dm2temp$endtotal < threshold/2,]$endtotal = 0
+  dm3 = dm2temp # copy this for debugging
+  if (defined(dm2temp[dm2temp$begtotal >= threshold,])) {
+    dm3[dm3$begtotal< threshold,]$begtotal = 0
+    for (i in seq(1,dim(dm3)[1],1)) {
+      if (i == 1) {dm3$begtotal = dm2temp$begtotal;  best_i = -1; last_pos = -1; last_begtotal = -1;} # for debugging
+      curr_pos        = dm3$pos[i]
+      curr_begtotal   = dm3$begtotal[i]
+      if (curr_begtotal >= threshold & best_i == -1) {
+        best_i = i
+        last_pos      = dm3$pos[best_i]
+        last_begtotal = dm3$begtotal[best_i]
+      } else if (curr_begtotal < threshold) {
+        best_i = -1
+        last_pos = -1
+        last_begtotal = -1
+      } else if (curr_begtotal >= threshold & best_i != -1 & last_pos < curr_pos & last_pos >= curr_pos - 2) {
+        if (myverbose == T) {cat("i=",i,"currpos=",curr_pos,",best_i=",best_i,"bset_pos=",last_pos,"sum=",last_begtotal+curr_begtotal,"\n")}
+        dm3$begtotal[best_i] = dm3$begtotal[best_i] + curr_begtotal
+        dm3$begtotal[i] = 0
+        best_i = best_i
+        last_pos      = dm3$pos[i]
+        last_begtotal = dm3$begtotal[best_i]
+      } else if (curr_begtotal >= threshold & best_i != -1 & last_pos < curr_pos - 2) {
+        best_i = i
+        last_pos      = dm3$pos[best_i]
+        last_begtotal = dm3$begtotal[best_i]
+      }
     }
   }
-  cbind(dm2temp,dm3)
 
-  for (i in seq(1,dim(dm3)[1],1)) {
-    if (i == 1) {dm3$endtotal = dm2temp$endtotal;  best_i = -1; last_pos = -1; last_endtotal = -1}
-    curr_pos        = dm3$pos[i]
-    curr_endtotal   = dm3$endtotal[i]
-    if (curr_endtotal >= threshold & best_i == -1) {
-      best_i = i
-      last_pos      = dm3$pos[best_i]
-      last_endtotal = dm3$endtotal[best_i]
-    } else if (curr_endtotal < threshold) {
-      best_i = -1
-      last_pos = -1
-      last_endtotal = -1
-    } else if (curr_endtotal >= threshold & best_i != -1 & last_pos < curr_pos & last_pos >= curr_pos - 2) {
-      cat("i=",i,"currpos=",curr_pos,",best_i=",best_i,"bset_pos=",last_pos,"sum=",last_endtotal+curr_endtotal,"\n")
-      dm3$endtotal[best_i] = dm3$endtotal[best_i] + curr_endtotal
-      dm3$endtotal[i] = 0
-      best_i = best_i
-      last_pos      = dm3$pos[i]
-      last_endtotal = dm3$endtotal[best_i]
-    } else if (curr_endtotal >= threshold & best_i != -1 & last_pos < curr_pos - 2) {
-      best_i = i
-      last_pos      = dm3$pos[best_i]
-      last_endtotal = dm3$endtotal[best_i]
+  #for debugging
+  if (myverbose == T) {
+    print(cbind(dm2temp,dm3))
+  }
+  
+  if (defined(dm2temp[dm2temp$endtotal >= threshold,])) {
+    for (i in seq(dim(dm3)[1],1,-1)) {
+      if (i == dim(dm3)[1]) {dm3$endtotal = dm2temp$endtotal;  best_i = -1; last_pos = -1; last_endtotal = -1}
+      curr_pos        = dm3$pos[i]
+      curr_endtotal   = dm3$endtotal[i]
+      if (curr_endtotal >= threshold & best_i == -1) {
+        best_i = i
+        last_pos      = dm3$pos[best_i]
+        last_endtotal = dm3$endtotal[best_i]
+      } else if (curr_endtotal < threshold) {
+        best_i = -1
+        last_pos = -1
+        last_endtotal = -1
+      } else if (curr_endtotal >= threshold & best_i != -1 & last_pos > curr_pos & last_pos <= curr_pos + 2) {
+        if (myverbose == T) {cat("i=",i,"currpos=",curr_pos,",best_i=",best_i,"bset_pos=",last_pos,"sum=",last_endtotal+curr_endtotal,"\n")}
+        dm3$endtotal[best_i] = dm3$endtotal[best_i] + curr_endtotal
+        dm3$endtotal[i] = 0
+        best_i = best_i
+        last_pos      = dm3$pos[i]
+        last_endtotal = dm3$endtotal[best_i]
+      } else if (curr_endtotal >= threshold & best_i != -1 & last_pos > curr_pos + 2) {
+        best_i = i
+        last_pos      = dm3$pos[best_i]
+        last_endtotal = dm3$endtotal[best_i]
+      }
     }
   }
-  cbind(dm2temp,dm3)
-  dm3[dm3$begtotal < threshold,]$begtotal = 0
-  dm3[dm3$endtotal < threshold,]$endtotal = 0
-  cbind(dm2temp,dm3)
+  #for debugging
+  if (myverbose == T) {
+    print(cbind(dm2temp,dm3))
+  }
+  if (defined(dm3[dm3$begtotal < threshold,])) {
+    dm3[dm3$begtotal < threshold,]$begtotal = 0
+  }
+  if (defined(dm3[dm3$endtotal < threshold,])) {
+    dm3[dm3$endtotal < threshold,]$endtotal = 0
+  }
+
+  if (myverbose == T) {
+    print(cbind(dm2temp,dm3))
+  }
+#  mythres
+  #cbind(dm2temp,dm3)
+  
   # 
   # 
   # for (i in seq(dim(dm3)[1],1,-1)) {
@@ -195,15 +235,27 @@ get_dm3 = function(dm2, divby,threshold,useSD=0) {
   # }
   # 
   
-  dm3 = dm3[dm3$begtotal > threshold | dm3$endtotal > threshold,]
-  dm3beg = subset(dm3[dm3$begtotal > threshold,],select=c("pos","begtotal")); colnames(dm3beg) = c("pos","total")
-  dm3beg$type = 'beg'
-  dm3end = subset(dm3[dm3$endtotal > threshold,],select=c("pos","endtotal")); colnames(dm3end) = c("pos","total")
-  dm3end$type = 'end'
-  dm3 = rbind(dm3beg,dm3end)
-  
-  #initgraph(dm2,dm3,divby,genewant,threshold)
-  return(dm3)
+  if (defined(dm3[dm3$begtotal > threshold,]) == FALSE & defined(dm3[dm3$endtotal > threshold,]) == FALSE) {
+    return(dm3return)
+  } else {
+    dm3beg = data.frame()
+    if (defined(dm3[dm3$begtotal > threshold,])) {
+      dm3beg = subset(dm3[dm3$begtotal > threshold,],select=c("pos","begtotal")); colnames(dm3beg) = c("pos","total")
+      dm3beg$type = 'beg'
+      dm3beg$divby = divby
+      dm3beg$mythres = threshold
+    }
+    dm3end = data.frame()
+    if (defined(dm3[dm3$endtotal > threshold,])) {
+      dm3end = subset(dm3[dm3$endtotal > threshold,],select=c("pos","endtotal")); colnames(dm3end) = c("pos","total")
+      dm3end$type = 'end'
+      dm3end$divby = divby
+      dm3end$mythres = threshold
+    }
+    #dm3end$pos = dm3end$pos + 1
+    #initgraph(dm2,dm3,divby,genewant,threshold)
+    return(rbind(dm3beg,dm3end))
+  }
 }
 
 initgraph = function(dm2, dm3,divby,mygene="NA",threshold=0) {
@@ -373,6 +425,9 @@ lastdone = 1
 dm1 = data.frame()
 dm2 = data.frame()
 loopend = size(files2)
+
+currInd = 361 # VR20 C
+
 for (currInd in seq(lastdone,loopend)) {
   lastdone = currInd
   
@@ -390,15 +445,30 @@ for (currInd in seq(lastdone,loopend)) {
   
   if (last.files != curr.files) {
     dm1 = get_dm2(curr.files,curr.genes)
+    dm1 = dm1[dm1$t0 == 0,]
+    if (dim(dm1[is.na(dm1$treat),])[1] > 0) {
+      dm1[is.na(dm1$treat),]$treat = "NONE"
+    }
+    if (defined(dm1[dm1$treat == 'NA',])) {
+      dm1[is.na(dm1$treat),]$treat = "NONE"
+    }
     dm2 = dm1[dm1$treat == curr.treat,]
   } else if (last.genes != curr.genes) {
     dm1 = get_dm2(curr.files,curr.genes)
+    dm1 = dm1[dm1$t0 == 0,]
+    
+    if (dim(dm1[is.na(dm1$treat),])[1] > 0) {
+      dm1[is.na(dm1$treat),]$treat = "NONE"
+    }
+    if (defined(dm1[dm1$treat == 'NA',])) {
+      dm1[is.na(dm1$treat),]$treat = "NONE"
+    }
     dm2 = dm1[dm1$treat == curr.treat,]
   } else if (last.treat != curr.treat) {
     dm2 = dm1[dm1$treat == curr.treat,]
   }
   
-  final3.temp = main(dm1,dm2)
+  final3.temp = main(dm1,dm2,mytitle)
   if (defined(final3.temp)) {
     final3.temp$treat = curr.treat
     final3.temp$gene = curr.genes
@@ -473,7 +543,7 @@ for (currInd in seq(lastdone,loopend)) {
 #   }
 # }
 
-main = function(dm1, dm2) {
+main = function(dm1, dm2,mytitle,mydebug=F) {
   dm4 = dm2[1:4]
   dim(dm4)
   
@@ -515,121 +585,232 @@ main = function(dm1, dm2) {
     mythres2 = ai(sqrt(dim(dm4)[1]/9230)*100)
     mythres
   }
-  
-  #!-------------------
+  #mythres=15
+  #mythres2 =15
+  print(paste(mytitle,'; divby',divby,'; threshold',mythres,mythres2))
+
+  #mythres=8
   finalbeg = data.frame()
   finalend = data.frame()
   final0 = data.frame()
   
-  #!-------------------
   dm2b = get_dm2b(dm2,divby)
   dm2c = get_dm2c(dm2,divby)
-  dm3 = get_dm3(dm2, divby, mythres)
+  dm3 = get_dm3(dm2, divby, mythres,myverbose=T)
   
   yMIN = 0
   yMAX = 5000/divby
   xMIN = 0
   xMAX = 5000/divby
-  myx = c()
-  myy = c()
-  mytype = c()
-  
-  goodbegs = dm3[dm3$type == 'beg',]$pos
-  goodbegs = c(min(dm2b$beg)-1,goodbegs,max(dm2b$beg))
-  goodbegs
-  goodends = dm3[dm3$type == 'end',]$pos
-  goodends = c(min(dm2b$end)-1,goodends,max(dm2b$end))
-  goodends
-  p = initgraph(dm2, dm3, divby,mytitle,mythres)
-  p2 = p
-  #initgraph2(p,goodbegs,goodends)
-  for (i in seq(length(goodbegs),1,-1)) {
-    # if (i == length(goodbegs)) {
-    #   final0 = data.frame()
-    #   finalbeg = data.frame()
-    #   finalend = data.frame()
-    # }
-    xbeg0 = goodbegs[i-1]
-    xbeg1 = goodbegs[i]
-    if (dim(dm4[ai(dm4$beg/divby) > xbeg0 & ai(dm4$beg/divby) <= xbeg1,])[1] == 0) {next}
-    end2 = dm4[ai(dm4$beg/divby) > xbeg0 & ai(dm4$beg/divby) <= xbeg1,]
-    dm3b = get_dm3(end2, divby, mythres2)
-    dm3b = dm3b[dm3b$type == 'end' &  dm3b$pos > 0,]
-    print(paste(xbeg0,xbeg1,dm3b[,1], ":", dm3b[,3]))
-    dm3c = dm3b
-    if (dim(dm3c[dm3c$type == 'end' & dm3c$pos  >= mythres2,])[1] == 0) {next}
-    if (dim(dm3c[dm3c$type == 'end' & dm3c$pos  >= mythres2,])[1] > 0) {dm3c = dm3c[dm3c$type == 'end' & dm3c$pos  >= mythres2,]}
-    for (j in 1:length(dm3c$pos)) {
-      curr.y = dm3c$pos[j]
-      curr.x0end = xbeg0
-      curr.x1beg = xbeg1
-      final.temp.beg0 = data.frame(x=curr.x0end,y=curr.y,type='beg0')
-      final.temp.beg1 = data.frame(x=curr.x1beg,y=curr.y,type='beg1')
-      final.temp = rbind(final.temp.beg0,final.temp.beg1)
-      # final0 = rbind(final0,final.temp)
-      # 
-      # p2 = p2 + 
-      #   geom_point(data=final.temp.beg0,aes(x=x,y=y),color=rgb(0,0,1,1),pch=15) +
-      #   geom_line( data=final.temp,     aes(x=x,y=y),color=rgb(0,0,1,1)) +
-      #   geom_point(data=final.temp.beg1,aes(x=x,y=y),color=rgb(0,0,1,1),pch=15)
-      # myx = c(myx,curr.x0end,curr.x1beg)
-      # myy = c(myy,curr.y,curr.y)
-      # mytype = c(mytype,'beg0','beg1')
-      finalbeg = rbind(finalbeg,data.frame(x0end=curr.x0end,y0end=curr.y,x1beg=curr.x1beg,y1beg=curr.y))
+ 
+  get_good = function(dm2b, dm3,type) {
+    if (defined(dm3[dm3$type == type,])) {
+      goodbegs = dm3[dm3$type == type,]$pos
+      if (!min(dm2b$beg) %in% goodbegs) {
+        goodbegs = c(min(dm2b$beg)-1,goodbegs)
+      }
+      if (!max(dm2b$beg) %in% goodbegs) {
+        goodbegs = c(goodbegs,max(dm2b$beg))
+      }
+      return(goodbegs)
+    } else {
+      return(data.frame())
     }
   }
-  #initgraph2(p2,goodbegs,goodends)
+  goodbegs = get_good(dm2b, dm3,'beg')
+  goodbegs
+  goodends = get_good(dm2b, dm3,'end')
+  goodends
   
-  # p2.save = p2
+  # goodends = dm3[dm3$type == 'end',]$pos
+  # goodends
+  # if (!min(dm2b$end) %in% goodends) {
+  #   goodends = c(min(dm2b$end-1),goodends)
+  # }
+  # if (!max(dm2b$end) %in% goodends) {
+  #   goodends = c(goodends,max(dm2b$end))
+  # }  
+  # goodends
+  
+  p = initgraph(dm2, dm3, divby,mytitle,mythres)
+  p2 = p
+  p2.beg = p
+  p2.end = p
+  if (mydebug == T) {print(initgraph2(p2,goodbegs,goodends))}
+  
+  for (goodbegsInd in seq(1,(length(goodbegs)-1))) {
+    if (goodbegsInd == 1) {#length(goodbegs)-1) {
+      final0 = data.frame()
+      finalbeg = data.frame()
+      finalend = data.frame()
+    }
+    x0 = goodbegs[goodbegsInd+0]
+    x1 = goodbegs[goodbegsInd+1]
+    print(paste(x0))
+    if (defined(dm3[dm3$type == 'end' & dm3$total >= mythres2,]) == FALSE) {next}
+    #if (defined(dm2[ai(dm2$beg / divby) > x0 & ai(dm2$beg/divby) <= x1,]) == FALSE) {next}
+    #dm2.end = dm2[ai(dm2$beg / divby) > x0 & ai(dm2$beg/divby) <= x1,]
+    for (goodendsInd in seq(1,length(goodends)-2)) {
+      y0 = goodends[goodendsInd+0]
+      y1 = goodends[goodendsInd+1]
+      #y1 = goodends[goodendsInd+1]
+      if (dim(dm2[
+        ai(dm2$beg / divby) > x0 & ai(dm2$beg/divby) <= x1 &
+        ai(dm2$end / divby) >= y1-1 & ai(dm2$end/divby) <= y1,
+        ])[1] == 0) {next}
+      dm2.end = dm2[
+        ai(dm2$beg / divby) > x0 & ai(dm2$beg/divby) <= x1 &
+        ai(dm2$end / divby) >= y1-1 & ai(dm2$end/divby) <= y1,
+        ]
+      print(paste('(',x0,',',y0,') - (',x1,',',y1,') ',dim(dm2.end)[1],' ',sep=''))
+      if (dim(dm2[
+        ai(dm2$beg / divby) > x0 & ai(dm2$beg/divby) <= x1 &
+        ai(dm2$end / divby) >= y1-1 & ai(dm2$end/divby) <= y1,
+        ])[1] < mythres) {next}
+      print(paste('USED! (',x0,',',y0,') - (',x1,',',y1,') ',dim(dm2.end)[1],' ',sep=''))
+#      print(defined(dm2.end[ai(dm2.end / divby) > y0 & ai(dm2$end/divby) <= y1,]))
+#      if (defined(dm2.end[ai(dm2.end / divby) > y0 & ai(dm2$end/divby) <= y1,])) {
+#        dm2.end2 = dm2.end[ai(dm2.end / divby) > y0 & ai(dm2$end/divby) <= y1,]
+#        if (dim(dm2.end2)[1] > mythres2) {
+          print(paste('(',x0,',',y0,') - (',x1,',',y1,')',sep=''))
+          final.temp.beg0 = data.frame(x=x0,y=y1,type='beg0')
+          final.temp.beg1 = data.frame(x=min(x1,y1),y=y1,type='beg1')
+          final.temp = rbind(final.temp.beg0,final.temp.beg1)
+          finalbeg.temp = data.frame(x0=x0,y0=y1,x1=min(x1,y1),y1=y1)
+          finalbeg = rbind(finalbeg,finalbeg.temp)
+          
+          p2.beg = p2 +
+            geom_point(data=final.temp.beg0,aes(x=x,y=y),color=rgb(0,0,1,1),pch=15) +
+            geom_line( data=final.temp,     aes(x=x,y=y),color=rgb(0,0,1,1)) +
+            geom_point(data=final.temp.beg1,aes(x=x,y=y),color=rgb(0,0,1,1),pch=15)
+          p2 = p2 +
+            geom_point(data=final.temp.beg0,aes(x=x,y=y),color=rgb(0,0,1,1),pch=15) +
+            geom_line( data=final.temp,     aes(x=x,y=y),color=rgb(0,0,1,1)) +
+            geom_point(data=final.temp.beg1,aes(x=x,y=y),color=rgb(0,0,1,1),pch=15)
+          
+#        }
+#      }
+    }
+    
+    # dm2.end = dm2[ai(dm2$beg / divby) > x0 & ai(dm2$beg/divby) <= x1,]
+    # dm2b.end = get_dm2b(dm2.end,divby)
+    # dm3.end = get_dm3(dm2.end,divby,mythres2)
+    # goodends.temp = get_good(dm2b.end,dm3.end,'end')
+    # 
+    # if (size(goodends.temp) == 0) {next}
+    # for (goodends.tempInd in (seq(1,length(goodends.temp) ))) {
+    #   y0 = goodends.temp[goodends.tempInd]
+    #   y1 = y0
+    #   print(paste('(',x0,',',y0,') - (',x1,',',y1,')',sep=''))
+    #   final.temp.beg0 = data.frame(x=x0,y=y1,type='beg0')
+    #   final.temp.beg1 = data.frame(x=min(x1,y1),y=y1,type='beg1')
+    #   final.temp = rbind(final.temp.beg0,final.temp.beg1)
+    #   finalbeg.temp = data.frame(x0=x0,y0=y0,x1=min(x1,y1),y1=y1)
+    #   finalbeg = rbind(finalbeg,finalbeg.temp)
+    #   
+    #   p2.beg = p2 +
+    #     geom_point(data=final.temp.beg0,aes(x=x,y=y),color=rgb(0,0,1,1),pch=15) +
+    #     geom_line( data=final.temp,     aes(x=x,y=y),color=rgb(0,0,1,1)) +
+    #     geom_point(data=final.temp.beg1,aes(x=x,y=y),color=rgb(0,0,1,1),pch=15)
+    #   p2 = p2 +
+    #     geom_point(data=final.temp.beg0,aes(x=x,y=y),color=rgb(0,0,1,1),pch=15) +
+    #     geom_line( data=final.temp,     aes(x=x,y=y),color=rgb(0,0,1,1)) +
+    #     geom_point(data=final.temp.beg1,aes(x=x,y=y),color=rgb(0,0,1,1),pch=15)
+    # }
+  }
+  if (mydebug == T) {print(initgraph2(p2,goodbegs,goodends))}
+
+  p2.save = p2
   # myx.save = myx
   # myy.save = myy
   # mytype.save = mytype
-  for (i in seq(length(goodends),1,-1)) {
-    # if (i == length(goodends)) {
-    #   p = p.save
-    #   mytype = mytype.save
-    #   myx = myx.save
-    #   myy = myy.save
-    #   finalend=  data.frame()
-    # }
-    xend0 = goodends[i-1]
-    xend1 = goodends[i]
-    if (dim(dm4[ai(dm4$end/divby) > xend0 & ai(dm4$end/divby) <= xend1,])[1] == 0) {next}
-    beg2 = dm4[ai(dm4$end/divby) > xend0 & ai(dm4$end/divby) <= xend1,]
-    dm3b = get_dm3(beg2, divby, mythres2)
-    dm3b = dm3b[dm3b$type == 'beg' &  dm3b$pos > 0,]
-    dm3c = dm3b
-    if (dim(dm3c[dm3c$type == 'beg' & dm3c$pos  >= mythres2,])[1] == 0) {next}
-    if (dim(dm3c[dm3c$type == 'beg' & dm3c$pos  >= mythres2,])[1] > 0) {dm3c = dm3c[dm3c$type == 'beg' & dm3c$pos  >= mythres2,]}
-    for (j in seq(1:length(dm3c$pos))) {
-      cat('\n')
-      curr.x = dm3c$pos[j]
-      curr.y0end = xend0
-      curr.y1beg = xend1
-  
-      final.temp.end0 = data.frame(x=curr.x,y=curr.y0end,type='end0')
-      final.temp.end1 = data.frame(x=curr.x,y=curr.y1beg,type='end1')
+  #p2 = p
+  for (goodendsInd in seq(1,length(goodends)-1)) {
+#  for (i in seq(length(goodends),1,-1)) {
+    if (goodendsInd == 1) {#length(goodends)-1) {
+      final0 = data.frame()
+      finalend = data.frame()
+      p2 = p2.save
+    }
+    y0 = goodends[goodendsInd+0]
+    y1 = goodends[goodendsInd+1]
+    print(goodendsInd)
+    
+    if (defined(dm3[dm3$type == 'beg' & dm3$total >= mythres2,]) == FALSE) {next}
+    if (defined(dm4[ai(dm4$end / divby) > y0 & ai(dm4$end/divby) <= y1,]) == FALSE) {next}
+
+    for (goodbegsInd in seq(1,length(goodbegs)-2)) {
+      x0 = goodbegs[goodbegsInd+0]
+      x1 = goodbegs[goodbegsInd+1]
+      #y1 = goodbegs[goodbegsInd+1]
+      if (dim(dm2[
+        ai(dm2$beg / divby) > x0 & ai(dm2$beg/divby) <= x1 &
+        ai(dm2$end / divby) >= y1-1 & ai(dm2$end/divby) <= y1,
+      ])[1] == 0) {next}
+      dm2.beg = dm2[
+        ai(dm2$beg / divby) > x0 & ai(dm2$beg/divby) <= x1 &
+          ai(dm2$end / divby) >= y1-1 & ai(dm2$end/divby) <= y1,
+      ]
+      print(paste('(',x0,',',y0,') - (',x1,',',y1,') ',dim(dm2.beg)[1],' ',sep=''))
+      if (dim(dm2[
+        ai(dm2$beg / divby) > x0 & ai(dm2$beg/divby) <= x1 &
+        ai(dm2$end / divby) >= y1-1 & ai(dm2$end/divby) <= y1,
+      ])[1] < mythres) {next}
+      print(paste('USED! (',x0,',',y0,') - (',x1,',',y1,') ',dim(dm2.beg)[1],' ',sep=''))
+      # beg2 = dm2[ai(dm2$end / divby) >= y0 & ai(dm2$end/divby) < y1,]
+      # goodbegs.temp = get_dm3(beg2,divby,mythres2)
+      # if (defined(goodbegs.temp[goodbegs.temp$type == 'beg',])) {
+      #   goodbegs.temp = goodbegs.temp[goodbegs.temp$type == 'beg',]
+      # }
+      # #print(goodbegs.temp$pos)
+      #   for (goodbegs.tempInd in rev(seq(1:size(goodbegs.temp)))) {
+      #    if (length(goodbegs.temp) == 0) {next}
+      #    for (goodbegs.tempInd in (seq(1,length(goodbegs.temp) ))) {
+      ##x0 = goodbegs.temp[goodbegs.tempInd]
+      #x1 = x0
+      print(paste('(',x0,',',y0,') - (',x1,',',y1,')',sep=''))
+      #print(paste(goodendsInd,',',goodbegs.tempInd,': (',x0,',',y0,') - (',x1,',',y1,')',sep=''))
+      final.temp.end0 = data.frame(x=x0,y=max(x0,y0),type='end0')
+      final.temp.end1 = data.frame(x=x0,y=y1,type='end1')
       final.temp = rbind(final.temp.end0,final.temp.end1)
-      # final0 = rbind(final0,final.temp)
-      # 
-      # p2 = p2 + 
-      #   geom_point(data=final.temp.end0,aes(x=x,y=y),color=rgb(1,0,0,1),pch=15) +
-      #   geom_line(data=final.temp, aes(x=x,y=y),color=rgb(1,0,0,1)) +
-      #   geom_point(data=final.temp.end1,aes(x=x,y=y),color=rgb(1,0,0,1),pch=18)  
-      # myx = c(myx,curr.x,curr.x)
-      # myy = c(myy,curr.y0end,curr.y1beg)
-      # # mytype = c(mytype,'end0','end1')
-      # print(paste('i=',i,',j=',j,': AFTER : ',curr.x,',',curr.y0end,' - ',curr.x,',',curr.y1beg,sep=''))
-      finalend = rbind(finalend,data.frame(x0end=curr.x,y0end=curr.y0end,x1beg=curr.x,y1beg=curr.y1beg))
+      finalend.temp = data.frame(x0=x0,y0=max(x0,y0),x1=x0,y1=y1)
+      finalend = rbind(finalend,finalend.temp)
+      
+      #cat(x0,y0,y1,'\n')
+      #print(paste(goodendsInd,goodends.tempInd))
+      #print(finalend.temp)
+      
+      p2 = p2 +
+        geom_point(data=final.temp.end0,aes(x=x,y=y),color=rgb(1,0,0,1),pch=15) +
+        geom_line( data=final.temp,     aes(x=x,y=y),color=rgb(1,0,0,1)) +
+        geom_point(data=final.temp.end1,aes(x=x,y=y),color=rgb(1,0,0,1),pch=15)
+      p2.end = p2.end +
+        geom_point(data=final.temp.end0,aes(x=x,y=y),color=rgb(1,0,0,1),pch=15) +
+        geom_line( data=final.temp,     aes(x=x,y=y),color=rgb(1,0,0,1)) +
+        geom_point(data=final.temp.end1,aes(x=x,y=y),color=rgb(1,0,0,1),pch=15)
     }
   }
-  #p2.save = p2
-  #initgraph2(p2,goodbegs,goodends)
-  
+  if (mydebug == T) {print(initgraph2(p2,goodbegs,goodends))}
+  print(initgraph2(p2.beg,goodbegs,goodends))
+  print(initgraph2(p2.end,goodbegs,goodends))
+
+  finalbegInd = 1
+  finalendInd = 1
+  x0a = finalbeg[finalbegInd,]$x0
+  y0a = finalbeg[finalbegInd,]$y0
+  x1a = finalbeg[finalbegInd,]$x1
+  y1a = finalbeg[finalbegInd,]$y1
+
+  x0b = finalend[finalendInd,]$x0
+  y0b = finalend[finalendInd,]$y0
+  x1b = finalend[finalendInd,]$x1
+  y1b = finalend[finalendInd,]$y1
   for (i in 1:size(finalbeg)) {
     if (i == 1) {
       final0 = data.frame()
     }
+    x0end = finalbeg$x0end
+    
     for (j in 1:size(finalend)) {
       if (finalbeg$x0end[i] >= finalend$x0end[j] & finalbeg$x0end[i] <= finalend$x1beg[j]) {
         if (finalbeg$y0end[i] > finalend$y1beg[j]) {next}
@@ -650,92 +831,6 @@ main = function(dm1, dm2) {
   #              geom_rect(data=final0,aes(x=x0end,y=y0end,xmin=x0end,xmax=x1beg,ymin=y0end,ymax=y1beg),fill=NA,color='black'),
   #            goodbegs,goodends)
   
-  #length(finalend)
-  #final0 = data.frame(x=myx, y=myy, type=mytype)
-  # 
-  # final0 = final0[order(final0$x, final0$y),]
-  # 
-  # myx0end = c()
-  # myy0end = c()
-  # myx1beg = c()
-  # myy1beg = c()
-  # mypaste = c()
-  # for (i in 1:length(final0$x)) {
-  #   x0end = final0$x[i]
-  #   y0end = final0$y[i]
-  #   
-  #   for (j in 1:length(final0$y)) {
-  #     x1beg = final0$x[j]
-  #     y1beg = final0$y[j]
-  #     if (x1beg == x0end & y0end == y1beg) {next}
-  #     if (length(grep(paste(x0end,y0end,x1beg,y1beg),mypaste)) == 0 & x0end >= x1beg - border0 & x0end <= x1beg + border1) {
-  #       myx0end = c(myx0end, x0end)
-  #       myy0end = c(myy0end, y0end)
-  #       myx1beg = c(myx1beg, x1beg)
-  #       myy1beg = c(myy1beg, y1beg)
-  #       mypaste = c(mypaste, paste(x0end,y0end,x1beg,y1beg))
-  #     }
-  #   }
-  # }
-  # finalbeg = data.frame(x0end=myx0end, y0end=myy0end, x1beg=myx1beg,y1beg=myy1beg)
-  # finalbeg = finalbeg[order(finalbeg$x0end, finalbeg$y0end,finalbeg$x1beg,finalbeg$y1beg),]
-  # 
-  # p + geom_segment(data=finalbeg,aes(x=x0end,y=y0end,xend=x1beg,yend=y1beg),col=rgb(1,0,0,1))
-  # 
-  # myx0end = c()
-  # myy0end = c()
-  # myx1beg = c()
-  # myy1beg = c()
-  # mypaste = c()
-  # for (i in 1:length(final0$x)) {
-  #   x0end = final0$x[i]
-  #   y0end = final0$y[i]
-  #   
-  #   for (j in 1:length(final0$y)) {
-  #     x1beg = final0$x[j]
-  #     y1beg = final0$y[j]
-  #     if (x1beg == x0end & y0end == y1beg) {next}
-  #     if (length(grep(paste(x0end,y0end,x1beg,y1beg),mypaste)) == 0 & y0end >= y1beg -  border0 & y0end <= y1beg + border1) {
-  #       myx0end = c(myx0end, x0end)
-  #       myy0end = c(myy0end, y0end)
-  #       myx1beg = c(myx1beg, x1beg)
-  #       myy1beg = c(myy1beg, y1beg)
-  #       mypaste = c(mypaste, paste(x0end,y0end,x1beg,y1beg))
-  #     }
-  #   }
-  # }
-  # finalend = data.frame(x0end=myx0end, y0end=myy0end, x1beg=myx1beg,y1beg=myy1beg)
-  # finalend = finalend[order(finalend$x0end, finalend$y0end,finalend$x1beg,finalend$y1beg),]
-  # 
-  # segments(finalend$x0end,finalend$y0end,finalend$x1beg,finalend$y1beg,col=rgb(0,0,1,1),pch=18)
-  # 
-  # 
-  # #-----------------!
-  # 
-  # finalbegpaste = c()
-  # finalbegbackup = finalbeg
-  # 
-  # finalbeg = finalbegbackup
-  # finalbeg2 = data.frame()
-  # for (i in 1:dim(finalbeg)[1]) {
-  #   x0end = finalbeg$x0end[i]
-  #   y0end = finalbeg$y0end[i]
-  #   x1beg = finalbeg$x1beg[i]
-  #   y1beg = finalbeg$y1beg[i]
-  #   if (y0end > y1beg) {
-  #     y0end = finalbeg$y1beg[i]
-  #     y1beg = finalbeg$y0end[i]
-  #     finalbeg$y0end[i] = y0end
-  #     finalbeg$y1beg[i] = y1beg
-  #   }
-  #   mypaste = paste(x0end,y0end,x1beg,y1beg)
-  #   if (length(finalbegpaste[finalbegpaste == mypaste]) == 0) {
-  #     finalbegpaste = c(finalbegpaste,mypaste)
-  #     finalbeg2 = rbind(finalbeg2,data.frame(x0end=x0end,y0end=y0end,x1beg=x1beg,y1beg=y1beg))
-  #   }
-  # }
-  # 
-  
   final0$x0beg = final0$x0end
   final0$y0beg = final0$y1beg
   final0$x1end = final0$x0end
@@ -748,7 +843,7 @@ main = function(dm1, dm2) {
   save(final0,paste('resources/CLUSTRDS/',mytitle,'.RDS',sep=''))
   return(final0)
   
-  # debug drawing
+  # mydebug drawing
   p2 = ggplot(dm2b,aes(beg,end)) +
     geom_point(aes(alpha=sqrt(sum),size=sqrt(sum))) +
     geom_point(pch=".",color="grey") +
