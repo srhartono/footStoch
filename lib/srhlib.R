@@ -203,3 +203,14 @@ findedge = function(x) {
   }
   return(edges)
 }
+
+get_meanpos = function(pos,windowsmooth,stepsmooth) {
+  mylen = length(pos)
+  meanpos = c()
+  for (i in seq(1,mylen, stepsmooth)) {
+    i0 = i
+    i1 = min(i+gp$windowsmooth,mylen)
+    meanpos[i] = mean(pos[seq(i0,i1)])
+  }
+  return(meanpos)
+}

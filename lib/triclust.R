@@ -134,11 +134,17 @@ get_dm3 = function(dm2, divby,threshold,useSD=0,myverbose=F) {
   # last_begtotal = 0
   # last_begpos = -1
   
-  dm2temp[dm2temp$begtotal < threshold/2,]$begtotal = 0
-  dm2temp[dm2temp$endtotal < threshold/2,]$endtotal = 0
+  if (defined(dm2temp[dm2temp$begtotal < threshold/2,])) {
+    dm2temp[dm2temp$begtotal < threshold/2,]$begtotal = 0
+  }
+  if (defined(dm2temp[dm2temp$endtotal < threshold/2,])) {
+    dm2temp[dm2temp$endtotal < threshold/2,]$endtotal = 0
+  }
   dm3 = dm2temp # copy this for debugging
   if (defined(dm2temp[dm2temp$begtotal >= threshold,])) {
-    dm3[dm3$begtotal< threshold,]$begtotal = 0
+    if (defined(dm3[dm3$begtotal< threshold,])) {
+      dm3[dm3$begtotal< threshold,]$begtotal = 0
+    }
     for (i in seq(1,dim(dm3)[1],1)) {
       if (i == 1) {dm3$begtotal = dm2temp$begtotal;  best_i = -1; last_pos = -1; last_begtotal = -1;} # for debugging
       curr_pos        = dm3$pos[i]
@@ -165,13 +171,16 @@ get_dm3 = function(dm2, divby,threshold,useSD=0,myverbose=F) {
       }
     }
   }
-
+  
   #for debugging
   if (myverbose == T) {
     print(cbind(dm2temp,dm3))
   }
   
   if (defined(dm2temp[dm2temp$endtotal >= threshold,])) {
+    if (defined(dm3[dm3$endtotal< threshold,])) {
+      dm3[dm3$endtotal< threshold,]$endtotal = 0
+    }
     for (i in seq(dim(dm3)[1],1,-1)) {
       if (i == dim(dm3)[1]) {dm3$endtotal = dm2temp$endtotal;  best_i = -1; last_pos = -1; last_endtotal = -1}
       curr_pos        = dm3$pos[i]

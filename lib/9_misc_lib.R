@@ -1,4 +1,4 @@
-ps = function(df,by,gp,p=NA,add=F,y.var = NA,myparams=list(),print=F,group='cluster') {
+ps = function(df,by,gp,p=NA,add=F,y.var = NA,myparams=list(),print=F,group='cluster',colorgroup=NA) {
   temp = df
   bybeg = temp$beg
   byend = temp$end
@@ -20,8 +20,13 @@ ps = function(df,by,gp,p=NA,add=F,y.var = NA,myparams=list(),print=F,group='clus
     y.var = 'y'
   }
   
-  mycolors = c(brewer.pal(9,"Set1"),brewer.pal(9,"Set3"))
+  if (is.na(colorgroup)) {
+    colorgroup = group
+  }
+  
+  mycolors = c(brewer.pal(9,"Set1"),brewer.pal(8,"Set2"),brewer.pal(8,"Set2"))
   mybreaks = seq(0,length(mycolors)-1)
+  #p = 
   p = ggplot(temp,aes(x=temp[,bybeg],y=temp[,y.var],group=temp[,group])) +
   coord_cartesian(xlim=c(gp$minX,gp$maxX),ylim=c(gp$minY,max(temp[,y.var]))) +#max(500,max(temp$y)))) +
   geom_segment(aes(x=bybeg,xend=byend,y=temp[,y.var],yend=temp[,y.var],group=temp[,group],color=af(temp[,group]))) +#,color=rgb(0,0,0,0)) +
@@ -32,7 +37,19 @@ ps = function(df,by,gp,p=NA,add=F,y.var = NA,myparams=list(),print=F,group='clus
   ggtitle(gp$mytitle.wrap) +
   theme_bw() +
   theme(plot.title = element_text(size=5), legend.position='none')
-  
+  if (defined(gp)) {
+    if (defined(gp$mytitle)) {
+      if (grepl('T7',gp$mytitle)) {
+        p = p + 
+          annotate(geom='rect',xmin=587,xmax=605,ymin=0,ymax=max(temp[,y.var]),fill=rgb(0.25,0.25,0.25,0.1),color=rgb(0,0,0,0.10)) +
+          annotate(geom='text',x=595,y=max(temp[,y.var]),label='T7') +
+          annotate(geom='rect',xmin=641,xmax=841,ymin=0,ymax=max(temp[,y.var]),fill=rgb(0,0.50,0,0.1),color=rgb(0,0,0,0.10)) +
+          annotate(geom='text',x=741,y=max(temp[,y.var]),label='VR') +
+          annotate(geom='rect',xmin=842,xmax=1317,ymin=0,ymax=max(temp[,y.var]),fill=rgb(0,0,0.50,0.1),color=rgb(0,0,0,0.10)) +
+          annotate(geom='text',x=1000,y=max(temp[,y.var]),label='SNRPN') + theme_bw()   
+      }
+    }
+  }
   if (add == T) {
     p = p + geom_segment(data=temp,aes(x=bybeg,xend=byend,y=temp[,y.var],yend=temp[,y.var],group=group,color=af(group)))
   }
@@ -41,6 +58,145 @@ ps = function(df,by,gp,p=NA,add=F,y.var = NA,myparams=list(),print=F,group='clus
     print(p)
   }
   return(p)
+}
+
+ps2 = function(df,by,gp,p=NA,add=F,y.var = NA,myparams=list(),print=F,group='cluster',colorgroup=NA) {
+  temp = df
+  if (is.na(colorgroup)) {colorgroup = group}
+  bybeg = 'beg'
+  byend = 'end'
+  if (grepl('mean',by)) {
+    bybeg = 'meanbeg'
+    byend = 'meanend'
+  }
+  # } else if (defined(temp[,by])) {
+  #   if (grepl('beg',by)) {
+  #     bybeg = by
+  #     byend = gsub('beg','end',bybeg,perl=T)
+  #   } else {
+  #     byend = by
+  #     bybeg = gsub('beg','end',bybeg,perl=T)
+  #   }
+  # }
+  if (defined(y.var) == FALSE) {
+    y.var = 'y'
+  }
+  colorgroup='colorgroup'
+  mylist = get_color_breaks()
+  mycolors = mylist$mycolorgroup
+  mybreaks = mylist$mybreaks
+  # tempz2 = get_y(tempz2[order(tempz2$colorgroup,tempz2$beg,tempz2$end),])
+  # ggplot(tempz2,aes(beg,y,group=colorgroup)) + 
+  #   geom_segment(aes(x=beg,xend=end,y=y,yend=y,group=allcluster.name,color=af(colorgroup))) +
+  #   scale_color_manual(values=mycolors,breaks=mybreaks,label=mybreaks)
+  # mycolors = c(brewer.pal(9,"Set1"),brewer.pal(9,"Set2"),brewer.pal(9,"Set2"))
+  # mybreaks = seq(0,length(mycolors)-1)
+  #p = 
+  mygroup = af(temp[,group])
+  p = ggplot(temp,aes(x=temp[,bybeg],y=temp[,y.var])) +
+    coord_cartesian(xlim=c(gp$minX,gp$maxX),ylim=c(gp$minY,max(temp[,y.var]))) +#max(500,max(temp$y)))) +
+    geom_segment(aes(x=temp[,bybeg],xend=temp[,byend],y=temp[,y.var],yend=temp[,y.var],color=mygroup)) +
+    #,group=temp[,colorgroup],color=af(temp[,colorgroup]))) +#,color=rgb(0,0,0,0)) +
+    scale_color_manual(values=mycolors,breaks=mybreaks,label=mybreaks) +
+    #  geom_rect(aes(xmin=bybeg,xmax=byend,ymin=y-0.5,ymax=y+0.5,fill=cluster),color=rgb(0,0,0,0)) +
+    #  scale_x_continuous(breaks=seq(0,gp$maxX,500)) +
+    xlab('R-loop Position (bp)') + ylab('Read Number') +
+    ggtitle(gp$mytitle.wrap) +
+    theme_bw() +
+    theme(plot.title = element_text(size=5), legend.position='none')
+  if (defined(gp)) {
+    if (defined(gp$mytitle)) {
+      if (grepl('T7',gp$mytitle)) {
+        p = p + 
+          annotate(geom='rect',xmin=587,xmax=605,ymin=0,ymax=max(temp[,y.var]),fill=rgb(0.25,0.25,0.25,0.1),color=rgb(0,0,0,0.10)) +
+          annotate(geom='text',x=595,y=max(temp[,y.var]),label='T7') +
+          annotate(geom='rect',xmin=641,xmax=841,ymin=0,ymax=max(temp[,y.var]),fill=rgb(0,0.50,0,0.1),color=rgb(0,0,0,0.10)) +
+          annotate(geom='text',x=741,y=max(temp[,y.var]),label='VR') +
+          annotate(geom='rect',xmin=842,xmax=1317,ymin=0,ymax=max(temp[,y.var]),fill=rgb(0,0,0.50,0.1),color=rgb(0,0,0,0.10)) +
+          annotate(geom='text',x=1000,y=max(temp[,y.var]),label='SNRPN') + theme_bw()   
+      }
+    }
+  }
+  if (add == T) {
+    p = p + geom_segment(data=temp,aes(x=bybeg,xend=byend,y=temp[,y.var],yend=temp[,y.var],group=group,color=af(group)))
+  }
+  if(print == T)
+  {
+    print(p)
+  }
+  return(p)
+}
+get_color_breaks = function() {
+   
+  colzbin = c('Greens','Reds','YlOrBr','Purples','Blues','RdPu')
+  colzs = rep(colzbin,10)
+  colzs2 = data.frame()
+  for (i in 1:size(colzs)) {
+    colz = colzs[i]
+    colzdf = brewer.pal(9,colz)[3:9] 
+    if (i == 1) {
+      colzs2 = c(colzdf) #as.data.frame(t(colzdf))
+    }
+    else {
+      colzs2 = c(colzs2,colzdf) #rbind(colzs2,t(colzdf))
+    }
+  }
+  mybreaks = c(0,seq(1,size(colzs2)))#,-2)
+  colzs2 = c(rgb(0.25,0.25,0.25),colzs2)#,rgb(0.5,0.5,0.5))
+  mycolors = colzs2
+  return(list(mycolorgroup=mycolors,mybreaks=mybreaks))
+}
+graph.clust = function(df,dfclust,pdfout,gp,group) {
+  tempz = df
+  tempzclust = dfclust
+  tempz$cluster = tempz$allcluster.name
+  get_y = function(x) {
+    x$y = seq(1,size(x))
+    return(x)
+  }
+  tempz = get_y(tempz[order(tempz$allcluster.name,tempz$beg,tempz$end),])
+  mylist = get_color_breaks()
+  mycolors = mylist$mycolorgroup
+  mybreaks = mylist$mybreaks
+
+  pm2beg = ps2(df = tempz,by = 'beg',gp = gp,group = 'colorgroup')
+  # df = tempz
+  # by = 'beg'
+  # group = 'allcluster.name'
+  # colorgruop = 'colorgroup'
+  # pm2beg
+  
+  tempz = get_y(tempz[order(tempz$cluster,tempz$end,tempz$beg),])
+  pm2end = ps2(df = tempz,by = 'end',gp = gp,group = 'colorgroup')
+  
+  pm1 = ggplot(tempz,aes(group=af(allcluster.name),beg,end)) +
+    geom_point(pch='.',col='grey') +
+    annotate(geom='segment',x = 0,xend=2500,y=0,yend=2500) +
+    scale_color_manual(values=mycolors,breaks=mybreaks,label=mybreaks) +
+    geom_rect(data=tempzclust,aes(x=0,y=0,xmin=x0end,xmax=x1beg,ymin=y0end,ymax=y1beg,color=af(colorgroup)),fill=NA) +
+    geom_text(data=tempzclust,aes(x=x0end/2+x1beg/2,y=y0end/2+y1beg/2,label=colorgroup)) +
+    theme_bw()
+  
+  #paste(allcluster.name,'(',allcluster,')',sep='')),fill=NA)
+  
+  pm1beg = ggplot(tempz,aes(beg)) +#,end)) +
+    stat_density(bw = 5,color='black',lwd=0.5,fill=NA) +
+    geom_rect(data=tempzclust,aes(x=0,y=0,xmin=x0end,xmax=x1beg,ymin=0,ymax=0.006,fill=begcluster),color=NA,alpha=0.1) + 
+    scale_color_manual(values=mycolors,breaks=mybreaks,label=mybreaks) +
+    theme_bw() + theme(panel.grid = element_blank())
+
+  pm1end = ggplot(tempz,aes(end)) +#,end)) +
+    stat_density(bw = 5,color='black',lwd=0.5,fill=NA) +
+    geom_rect(data=tempzclust,aes(x=0,y=0,xmin=x0end,xmax=x1beg,ymin=0,ymax=0.006,fill=endcluster),color=NA,alpha=0.1) + 
+    scale_color_manual(values=mycolors,breaks=mybreaks,label=mybreaks) +
+    theme_bw() + theme(panel.grid = element_blank())
+  
+  pdf(pdfout,width=20,height=20)
+  print(grid.arrange(pm1,arrangeGrob(pm1beg,pm1end,nrow=2),pm2beg,pm2end,nrow=2,ncol=2))
+  dev.off()
+  #geom_point(pch='.',col='grey') +
+  #annotate(geom='segment',x = 0,xend=2500,y=0,yend=2500) +
+  #geom_rect(data=allcluster,aes(x=0,y=0,xmin=x0end,xmax=x1beg,ymin=y0end,ymax=y1beg,color=allcluster),fill=NA)
 }
 
 ggplot.xy = function(df=data.frame(),dfclust = data.frame(),outpdf = NA) {
