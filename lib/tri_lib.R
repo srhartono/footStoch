@@ -9,10 +9,17 @@ library(fitdistrplus)
 library(digest) #MD5
 library(swfscMisc)
 library(scater)
+library(pdfCluster)
+library(plotly)
+library(grid)
+library(ggplot2)
+library(gridExtra)
+
 source('lib/srhlib.R')
 source('lib/9_misc_lib.R')
 
-gp = list(
+
+gp.lib = list(
   minX = 0,
   minY = 0,
   maxX = 3000,
@@ -26,12 +33,24 @@ gp = list(
   dist.test_min.length = 5,
   dist.test_min.unique = 2,
   dist.test_max.unique.hots = 2,
-  divby=25
+  divby=25,
+  C.transform=FALSE,
+  use_clusterFile = FALSE
 )
 
+gp.check_gp = function(gp1,gp2,verbose=F,debug=F) {
+  if (digest(gp1) != digest(gp2)) {
+    print(pasta('gp and old gp isnt same!\n-',digest(gp1),'\n- ',digest(gp2)))
+  } else {
+    if (verbose == T) {
+      print(pasta('gp and gp.lib are same!\n- ',digest(gp1),'\n- ',digest(gp2)))
+    }
+  }
+  return(gp1)
+}
 
-get_peaktype = function(mystring) {
-  if (length(grep("PEAK_TEMP",mystring)) > 0) {
+get_peaktype = function(my.string) {
+  if (length(grep("PEAK_TEMP",my.string)) > 0) {
     peaktype = "BOT"
   }
   else {
@@ -41,7 +60,7 @@ get_peaktype = function(mystring) {
   return(peaktype)
 }
 
-debug_df = function(expected,todebug,type,verbose=F,mydata=data.frame,debug=F) {
+debug_df = function(expected,todebug,type,verbose=F,my.data=data.frame,debug=F) {
   if (expected != todebug) {
 
     cat(type,'debug FAILED\n')
@@ -49,7 +68,7 @@ debug_df = function(expected,todebug,type,verbose=F,mydata=data.frame,debug=F) {
     cat('- debug   : ',todebug,'\n')
     if (verbose == T)  {
 
-      cat(type,': mydata frame with',dim(mydata)[1],'rows',dim(mydata)[2],'columns\n')
+      cat(type,': my.data frame with',dim(my.data)[1],'rows',dim(my.data)[2],'columns\n')
     }
   }
   else {
@@ -59,7 +78,7 @@ debug_df = function(expected,todebug,type,verbose=F,mydata=data.frame,debug=F) {
     cat('- debug   : ',todebug,'\n')
     if (verbose == T)  {
 
-      cat(type,': mydata frame with',dim(mydata)[1],'rows',dim(mydata)[2],'columns\n')
+      cat(type,': my.data frame with',dim(my.data)[1],'rows',dim(my.data)[2],'columns\n')
     }
   }
 #  return(invisible())
@@ -124,7 +143,7 @@ parseFASTAFile = function(file=NA,debug=F,verbose=F) {
       debugmd5 = paste(basename(FASTAFILES[1]),digest(df))
       expected = 'invitro_10buf.fa f29c4bd9229050a9de2e75e0752e5e80'
       
-      debug_df(expected=expected,todebug=debugmd5,type='FASTAFile',mydata=df,verbose=T)
+      debug_df(expected=expected,todebug=debugmd5,type='FASTAFile',my.data=df,verbose=T)
       return(invisible())
     }
     return(parseFASTAFile.test())
@@ -167,7 +186,7 @@ parsePEAKFile = function(file,debug=F,verbose=F) {
       debugmd5 = paste(basename(PEAKFILES[1]),basename(PEAKFILES[11]),digest(df.PCB0),digest(df.T7),digest(df))
       expected = 'PCB0_PEAK_C.BED T7_INIT_PEAK_C.BED e90f49e2aeaaf7a92c817ab83e346945 42995643cfbc991594a842ff9f00b9ee f7a010ebeb3fc94f7053bf7215d315e3'
       
-      debug_df(expected=expected,todebug=debugmd5,type='PEAKFile',mydata=df,verbose=T)
+      debug_df(expected=expected,todebug=debugmd5,type='PEAKFile',my.data=df,verbose=T)
       return(invisible())
     }
     parsePEAKFile.test()
@@ -199,7 +218,7 @@ parseBEDFile = function(file,debug=F,verbose=F) {
       expected = 'annotation.bed 1f27dafec79f0221d87c0e4b216838a3'
       debugmd5 = paste(basename(BEDFILES[1]),digest(df.annotation))
       
-      debug_df(expected=expected,todebug=debugmd5,type='BEDFile',mydata=df,verbose=T)
+      debug_df(expected=expected,todebug=debugmd5,type='BEDFile',my.data=df,verbose=T)
       return(invisible())
     }
     parseBEDFile.test()
@@ -218,7 +237,7 @@ parseMAINFile = function(gp,debug=F,verbose=F) {
   if (debug == T) {
     expected = '9b076f1c83a66a57e549a067e72c8194'
     todebug    = digest(CLUSTS)
-    debug_df(expected=expected,todebug=todebug,type="CLUSTS",mydata=CLUSTS,verbose=T)
+    debug_df(expected=expected,todebug=todebug,type="CLUSTS",my.data=CLUSTS,verbose=T)
   }  
   
   # Parse PEAKS
@@ -232,7 +251,7 @@ parseMAINFile = function(gp,debug=F,verbose=F) {
   if (debug == T) {
     expected = 'ac765900dd2ab39320fabd2c246b812e'
     todebug    = digest(PEAKS)
-    debug_df(expected=expected,todebug=todebug,type="PEAKS",mydata=PEAKS,verbose=T)
+    debug_df(expected=expected,todebug=todebug,type="PEAKS",my.data=PEAKS,verbose=T)
   }  
   # Parse BEDS
   BEDS  = data.frame()
@@ -245,7 +264,7 @@ parseMAINFile = function(gp,debug=F,verbose=F) {
 
     expected = 'b8978ebf63df566c3cdcf064871119f6'
     todebug    = digest(BEDS)
-    debug_df(expected=expected,todebug=todebug,type="BEDS",mydata=BEDS,verbose=T)
+    debug_df(expected=expected,todebug=todebug,type="BEDS",my.data=BEDS,verbose=T)
   }
   # Parse FASTAS
   FASTAS  = data.frame()
@@ -258,83 +277,83 @@ parseMAINFile = function(gp,debug=F,verbose=F) {
 
     expected = '61edd075305195026718a373e0a3db7e'
     todebug    = digest(FASTAS)
-    debug_df(expected=expected,todebug=todebug,type="FASTAS",mydata=FASTAS,verbose=T)
+    debug_df(expected=expected,todebug=todebug,type="FASTAS",my.data=FASTAS,verbose=T)
   }  
-  mylist=list(PEAKS=PEAKS,BEDS=BEDS,FASTAS=FASTAS,CLUST=CLUSTS)
-  return(mylist)
+  my.list=list(PEAKS=PEAKS,BEDS=BEDS,FASTAS=FASTAS,CLUST=CLUSTS)
+  return(my.list)
 }
 
-get_title = function(mytitle='',myparams=list(),verbose=F,debug=F) {
+get_title = function(my.title='',my.params=list(),verbose=F,debug=F) {
   
-  if (length(myparams) == 0) {
+  if (length(my.params) == 0) {
     
-    return(mytitle)
+    return(my.title)
   }
-  for (i in 1:length(myparams))  {
+  for (i in 1:length(my.params))  {
     
-    paramname = names(myparams)[i]
-    paramwant = myparams[i][[1]]
-    if (mytitle != '') {
+    paramname = names(my.params)[i]
+    paramwant = my.params[i][[1]]
+    if (my.title != '') {
       
-      mytitle = paste(mytitle,',',paramname,'_',paramwant,sep='')
+      my.title = paste(my.title,',',paramname,'_',paramwant,sep='')
     }
     else {
       
-      mytitle = paste(paramname,'_',paramwant,sep='')
+      my.title = paste(paramname,'_',paramwant,sep='')
     }
   }
-  if (mytitle == '') {
+  if (my.title == '') {
     
-    mytitle = 'NO_TITLE'
+    my.title = 'NO_TITLE'
   }
-  to_return = mytitle
+  to_return = my.title
   
   return(to_return)
 }
 
-wrap_title = function(mytitle='',width=10,verbose=F,debug=F) {
+wrap_title = function(my.title='',width=10,verbose=F,debug=F) {
   
-  to_return = paste(strwrap(gsub(',',' ',mytitle),width=width),collapse='\n')
+  to_return = paste(strwrap(gsub(',',' ',my.title),width=width),collapse='\n')
   
   return(to_return)
 }
 
-slice_bed = function(mybeds=BEDS,myparams=list(),myparams_regex=c(),genewant = NA,verbose=F,debug=F) {
+slice_bed = function(my.beds=BEDS,my.params=list(),my.params_regex=c(),genewant = NA,verbose=F,debug=F) {
   if (is.na(genewant)) {
-    if (defined(myparams_regex$gene)) {
-      if (myparams_regex$gene == TRUE) {
-        mybed = mybeds[grep(myparams$gene,mybeds$gene,ignore.case = TRUE),]
+    if (defined(my.params_regex$gene)) {
+      if (my.params_regex$gene == TRUE) {
+        my.bed = my.beds[grep(my.params$gene,my.beds$gene,ignore.case = TRUE),]
       } else {
-        mybed = mybeds[mybeds$gene == myparams$gene,]
+        my.bed = my.beds[my.beds$gene == my.params$gene,]
       }
     } else {
-      mybed = mybeds[mybeds$gene == myparams$gene,]
+      my.bed = my.beds[my.beds$gene == my.params$gene,]
     }
-    if (defined(mybed) == FALSE) {
-      mybed = mybeds[grep(paste('^',myparams$gene,'$',sep=''),mybeds$gene,ignore.case = TRUE),]
+    if (defined(my.bed) == FALSE) {
+      my.bed = my.beds[grep(paste('^',my.params$gene,'$',sep=''),my.beds$gene,ignore.case = TRUE),]
     }
   } else {
-    mybed = mybeds[grep(paste('^',genewant,'$',sep=''),mybeds$gene),]
-    if (defined(mybed) == FALSE) {
-      mybed = mybeds[grep(paste('^',genewant,'$',sep=''),mybeds$gene,ignore.case = TRUE),]
+    my.bed = my.beds[grep(paste('^',genewant,'$',sep=''),my.beds$gene),]
+    if (defined(my.bed) == FALSE) {
+      my.bed = my.beds[grep(paste('^',genewant,'$',sep=''),my.beds$gene,ignore.case = TRUE),]
     }
   }
-  return(mybed)
+  return(my.bed)
 }
 
-slice_df = function(mydata,myparams=list(),myparams_regex=list(),verbose=F,debug=F) {
+slice_df = function(my.data,my.params=list(),my.params_regex=list(),verbose=F,debug=F) {
 
   #gene.want='any',treat.want='any',peaktype.want='any',VR.want='any',thres.want='any',verbose=F,debug=F)
-  if (length(myparams) == 0) {
+  if (length(my.params) == 0) {
 
-    return(mydata)
+    return(my.data)
   }
-  for (i in 1:length(myparams))  {
+  for (i in 1:length(my.params))  {
 
-    orig = mydata
-    paramname = names(myparams)[i]
-    paramwant = myparams[i][[1]]
-    isregex = myparams_regex[i]
+    orig = my.data
+    paramname = names(my.params)[i]
+    paramwant = my.params[i][[1]]
+    isregex = my.params_regex[i]
     if (isregex == TRUE) {
 
       cat(i,'. ',paramname,': ',paramwant,' (regex): \t',sep='')
@@ -346,22 +365,22 @@ slice_df = function(mydata,myparams=list(),myparams_regex=list(),verbose=F,debug
     
     if (paramwant == 'any') {
 
-      cat(': From',dim(orig)[1],'x',dim(orig)[2],'to',dim(mydata)[1],'x',dim(mydata)[2],'\n',sep=' ')
+      cat(': From',dim(orig)[1],'x',dim(orig)[2],'to',dim(my.data)[1],'x',dim(my.data)[2],'\n',sep=' ')
       next
     }
 
-    mydata = mydata[!is.na(mydata[,paramname]),]
+    my.data = my.data[!is.na(my.data[,paramname]),]
     if (isregex == FALSE) {
 
-      mydata = mydata[mydata[,paramname] == paramwant,]
+      my.data = my.data[my.data[,paramname] == paramwant,]
     }
     else {
 
-      mydata = mydata[grep(paramwant,mydata[,paramname]),]
+      my.data = my.data[grep(paramwant,my.data[,paramname]),]
     }
-    cat(': From',dim(orig)[1],'x',dim(orig)[2],'to',dim(mydata)[1],'x',dim(mydata)[2],'\n',sep=' ')
+    cat(': From',dim(orig)[1],'x',dim(orig)[2],'to',dim(my.data)[1],'x',dim(my.data)[2],'\n',sep=' ')
   }
-  return(mydata)
+  return(my.data)
 }
 
 slice_CLUSTS = function(df,CLUSTS) {
@@ -400,7 +419,7 @@ get_cluster = function(df, dfclust = data.frame(),gp=list()) {
   return(to_return)
 }
 
-do_distributionTests = function(df = data.frame(), positionTypes = c('mean','orig'), testTypes=c('unif','norm','hots'), gp=list(), outpdf=F,myprint=F, debug=F, verbose=F) {
+do_distributionTests = function(df = data.frame(), positionTypes = c('mean','orig'), testTypes=c('unif','norm','hots'), gp=list(), outpdf=F,my.print=F, debug=F, verbose=F) {
   
   #  if (defined(gp$minpval) == F) {
   #    gp$minpval = 0.05
@@ -410,8 +429,8 @@ do_distributionTests = function(df = data.frame(), positionTypes = c('mean','ori
     if (outpdf == F) {
       outpdf = paste(paste(positionTypes,sep='_',collapse='_'),'_',paste(testTypes,sep='_',collapse='_'),'.pdf',collapse='',sep='')
       print(outpdf)
-      if (defined(gp$mytitle)) {
-        outpdf = paste(gp$mytitle,'_',outpdf,sep='')
+      if (defined(gp$my.title)) {
+        outpdf = paste(gp$my.title,'_',outpdf,sep='')
       }
       to_return = outpdf
       return(to_return)
@@ -422,7 +441,7 @@ do_distributionTests = function(df = data.frame(), positionTypes = c('mean','ori
   
   if (verbose == T) {print(outpdf)}
   
-  if (myprint == T) {pdf(outpdf)}
+  if (my.print == T) {pdf(outpdf)}
   
   misc = list(
     p.plot = list(),
@@ -475,7 +494,7 @@ do_distributionTests = function(df = data.frame(), positionTypes = c('mean','ori
         
         df2 = data.frame()
         
-        clusters = myorder(unique(df$cluster))
+        clusters = my.order(unique(df$cluster))
         misc[[positionType]][[testType]]$clusters = clusters
         misc[[positionType]][[testType]]$p.type = c(misc$p.type,paste(posType1,'.',testType,'.pval',sep=''))
         
@@ -525,10 +544,10 @@ do_distributionTests = function(df = data.frame(), positionTypes = c('mean','ori
           ##############
           # BIG LOOP 
           # Loop Start
-          # - start at i = 1 until i = myrange; myrange = min(i+window or dim(dm)[1])
+          # - start at i = 1 until i = my.range; my.range = min(i+window or dim(dm)[1])
           # - check p-value by testType (unif, hots, norm, etc)
           #   - if p-value is bigger than pval threshold (gp$minpval), extend and increase pval threshold (+ 1% each iteration) 
-          #     until it isn't, then next i jumps to myrange + 1
+          #     until it isn't, then next i jumps to my.range + 1
           #   - else, return and i = i + 1
           
           curr.i = 1
@@ -543,7 +562,7 @@ do_distributionTests = function(df = data.frame(), positionTypes = c('mean','ori
             
             last.i = curr.i
             
-            myrange = list(
+            my.range = list(
               i0  = curr.i,
               i1  = min(curr.i + gp$windowdist, max.i),
               add = 0,
@@ -551,77 +570,77 @@ do_distributionTests = function(df = data.frame(), positionTypes = c('mean','ori
               minpval = gp$minpval, #0.25
               minpval2 = gp$minpval2 #0.5
             )
-            myrange$seq  = seq(myrange$i0, myrange$i1)
-            myrange$size = length(myrange$seq)
+            my.range$seq  = seq(my.range$i0, my.range$i1)
+            my.range$size = length(my.range$seq)
             
-            # iterate from i0 to i1 (see myrange above)
-            # if p-value is bigger than pval threshold (gp$myrange$minpval), extend myrange and increase pval threshold (+ 1% each iteration)
+            # iterate from i0 to i1 (see my.range above)
+            # if p-value is bigger than pval threshold (gp$my.range$minpval), extend my.range and increase pval threshold (+ 1% each iteration)
             # else return curr.i = i + 1
             while (1) {
-              if (verbose == T) {cat('  -',myrange$i0,myrange$i1,myrange$add,myrange$p,'\n')}
-              myrange$p = 0
-              dm2 = dm[myrange$seq,]
+              if (verbose == T) {cat('  -',my.range$i0,my.range$i1,my.range$add,my.range$p,'\n')}
+              my.range$p = 0
+              dm2 = dm[my.range$seq,]
               
               
               # check each test
-              if (size(dm[myrange$seq,]) >= gp$dist.test_min.length) {
+              if (size(dm[my.range$seq,]) >= gp$dist.test_min.length) {
                 if (testType == 'unif') {
-                  if (length(unique(dm[myrange$seq,][,posType1])) >= gp$dist.test_min.unique) {
-                    myrange$hist = hist(dm[myrange$seq,posType1],plot=F,breaks = max(2,sqrt(dim(dm[myrange$seq,][,])[1])))
-                    myrange$p = uniform.test(myrange$hist)$p.value
+                  if (length(unique(dm[my.range$seq,][,posType1])) >= gp$dist.test_min.unique) {
+                    my.range$hist = hist(dm[my.range$seq,posType1],plot=F,breaks = max(2,sqrt(dim(dm[my.range$seq,][,])[1])))
+                    my.range$p = uniform.test(my.range$hist)$p.value
                   }
                 } else if(testType == 'norm') {
-                  if (length(unique(dm[myrange$seq,][,posType1])) >= gp$dist.test_min.unique) {
-                    myrange$p = shapiro.test(dm[myrange$seq,posType1])$p.value
+                  if (length(unique(dm[my.range$seq,][,posType1])) >= gp$dist.test_min.unique) {
+                    my.range$p = shapiro.test(dm[my.range$seq,posType1])$p.value
                   }
                 }
                 else if (testType == 'hots') {
-                  if (length(unique(dm[myrange$seq,][,posType1])) < gp$dist.test_max.unique.hots) {
-                    myrange$p = 1
+                  if (length(unique(dm[my.range$seq,][,posType1])) < gp$dist.test_max.unique.hots) {
+                    my.range$p = 1
                   }
                 }
               }
               
-              dm[myrange$seq,p.type] = apply(data.frame(dm[myrange$seq, p.type],rep(myrange$p, myrange$size)),1,max)
+              dm[my.range$seq,p.type] = apply(data.frame(dm[my.range$seq, p.type],rep(my.range$p, my.range$size)),1,max)
               
-              myrange$minpval = min(1,myrange$minpval + 1/100)
+              my.range$minpval = min(1,my.range$minpval + 1/100)
               
-              if (myrange$p >= myrange$minpval) {
-                myrange$add = myrange$add + 1
+              if (my.range$p >= my.range$minpval) {
+                my.range$add = my.range$add + 1
               } else {
                 break
               }
               
-              myrange$i1 = min(myrange$i1 + myrange$add, max.i)
-              myrange$seq = seq(myrange$i0, myrange$i1)
-              myrange$size = length(myrange$seq)
-              if (myrange$i1 >= max.i) {break}
+              my.range$i1 = min(my.range$i1 + my.range$add, max.i)
+              my.range$seq = seq(my.range$i0, my.range$i1)
+              my.range$size = length(my.range$seq)
+              if (my.range$i1 >= max.i) {break}
             }
             
-            # if the region passed pvalue threshold and extended by "myrange$add", then add that to the curr.i
-            if (myrange$add > 0) {
-              ibefore = myrange$i0
-              curr.i = myrange$i1
+            # if the region passed pvalue threshold and extended by "my.range$add", then add that to the curr.i
+            if (my.range$add > 0) {
+              ibefore = my.range$i0
+              curr.i = my.range$i1
               
               misc[[positionType]][[testType]][[cluster]]$sig.coords = rbind (
                 misc[[positionType]][[testType]][[cluster]]$sig.coords,
                 data.frame(positionType = posType1,
                            testType=testType,
                            cluster=cluster,
-                           x0end=min(dm[seq(myrange$i0,myrange$i1),posType1]),
-                           y0end=min(dm[seq(myrange$i0,myrange$i1),posType2]),
-                           x1beg=max(dm[seq(myrange$i0,myrange$i1),posType1]),
-                           y1beg=max(dm[seq(myrange$i0,myrange$i1),posType2]),
-                           y0=myrange$i0,
-                           y1=myrange$i1,
-                           x=100,y=myrange$i0,xmin=100,xmax=150)
+                           x0end=min(dm[seq(my.range$i0,my.range$i1),posType1]),
+                           y0end=min(dm[seq(my.range$i0,my.range$i1),posType2]),
+                           x1beg=max(dm[seq(my.range$i0,my.range$i1),posType1]),
+                           y1beg=max(dm[seq(my.range$i0,my.range$i1),posType2]),
+                           y0=my.range$i0,
+                           y1=my.range$i1,
+                           x=100,y=my.range$i0,xmin=100,xmax=150)
               )
 
               # Add to debug drawing
               # get color            
-              myrange$col = dist.test_get.color(myrange$p,gp)
-              dm.to_draw = data.frame(x=dm[myrange$seq,posType1] + gp$divby,y=dm[myrange$seq,]$y)
-              p = p + geom_line(data=dm.to_draw,aes(x=x,y=y),color=myrange$col,lwd=0.5)
+              my.range$col = dist.test_get.color(my.range$p,gp)
+              dm.to_draw = data.frame(x=dm[my.range$seq,posType1] + gp$divby,y=dm[my.range$seq,]$y)
+              p = p + geom_line(data=dm.to_draw,aes(x=x,y=y),color=my.range$col,lwd=0.5)
              
             }
             
@@ -687,8 +706,8 @@ do_distributionTests = function(df = data.frame(), positionTypes = c('mean','ori
 #  geom_histogram(aes(y=..density..,color=af(meanbeg.unif.sig.coords)),lwd=0.1,fill=NA,binwidth = 5) +
 #  geom_density(aes(color=af(meanbeg.unif.sig.coords))) + theme_bw() + coord_cartesian(xlim=c(0,3000)) +
 
-annot.pvar = function(mydf,mysc=data.frame()) {
-  mydf = mydf[order(mydf$cluster,mydf$meanbeg, mydf$meanend),]; mydf$y = seq(1,dim(mydf)[1])
+annot.pvar = function(my.df,my.sc=data.frame()) {
+  my.df = my.df[order(my.df$cluster,my.df$meanbeg, my.df$meanend),]; my.df$y = seq(1,dim(my.df)[1])
   for (positionTypesInd in seq(1,length(positionTypes))) {
     positionType      = positionTypes[positionTypesInd]
     
@@ -705,8 +724,8 @@ annot.pvar = function(mydf,mysc=data.frame()) {
       } else if (grepl("end",posType2)) {
         posType2 = gsub("end","beg",posType2,perl=T)
       }
-      mydf = mydf[order(mydf[,'cluster'],mydf[,posType1],mydf[,posType2]),]
-      mydf$y = seq(1,dim(mydf)[1])
+      my.df = my.df[order(my.df[,'cluster'],my.df[,posType1],my.df[,posType2]),]
+      my.df$y = seq(1,dim(my.df)[1])
       
       
       for (testTypesInd in seq(1,size(testTypes))) {
@@ -714,32 +733,32 @@ annot.pvar = function(mydf,mysc=data.frame()) {
         pval.varname = paste(posType1,'.',testType,'.pval',sep='')
         varname = paste(posType1,'.',testType,'.sig.coords',sep='')
         print(varname)
-        mydf[,varname] = 0
-        d1 = print(defined(mysc[mysc$positionType == posType1,]$testType))
-        d2 = print(defined(mysc[mysc$positionType == posType1 & mysc$testType == testType,]$testType))
+        my.df[,varname] = 0
+        d1 = print(defined(my.sc[my.sc$positionType == posType1,]$testType))
+        d2 = print(defined(my.sc[my.sc$positionType == posType1 & my.sc$testType == testType,]$testType))
         #if (d1 == TRUE & d2 == TRUE) {
-        if (defined(mysc[mysc$positionType == posType1 & mysc$testType == testType,]$testType)) {
-          mysc.sub = mysc[mysc$positionType == posType1 & mysc$testType == testType,]
-          for (i in seq(1,dim(mysc.sub)[1])) {
-            mydf[mydf$y >= mysc.sub$y0[i] & mydf$y <= mysc.sub$y1[i],varname] = 1
-            #mydf[mydf[,pval.varname] < 0.5,varname] = 0
+        if (defined(my.sc[my.sc$positionType == posType1 & my.sc$testType == testType,]$testType)) {
+          my.sc.sub = my.sc[my.sc$positionType == posType1 & my.sc$testType == testType,]
+          for (i in seq(1,dim(my.sc.sub)[1])) {
+            my.df[my.df$y >= my.sc.sub$y0[i] & my.df$y <= my.sc.sub$y1[i],varname] = 1
+            #my.df[my.df[,pval.varname] < 0.5,varname] = 0
             
             if (testType == 'unif' & posType1 == 'meanbeg') {
-              print(paste(posType1,testType,i,mysc.sub$y0[i],mysc.sub$y1[i]))
+              print(paste(posType1,testType,i,my.sc.sub$y0[i],my.sc.sub$y1[i]))
             }
           }
         }
       }
     }
   }
-  return(mydf)  
+  return(my.df)  
 }
 
-re.sc = function(mydf,mysc,positionTypes,testTypes) {#,posTypeWant = 'beg') {
-  #mydf = mylist$df
-  #mysc = mylist$misc$sig.coords
+re.sc = function(my.df,my.sc,positionTypes,testTypes) {#,posTypeWant = 'beg') {
+  #my.df = my.list$df
+  #my.sc = my.list$misc$sig.coords
   
-  #mydf = mydf[order(mydf$cluster,mydf$meanbeg, mydf$meanend),]; mydf$y = seq(1,dim(mydf)[1])
+  #my.df = my.df[order(my.df$cluster,my.df$meanbeg, my.df$meanend),]; my.df$y = seq(1,dim(my.df)[1])
   for (positionTypesInd in seq(1,length(positionTypes))) {
     positionType      = positionTypes[positionTypesInd]
     
@@ -747,7 +766,7 @@ re.sc = function(mydf,mysc,positionTypes,testTypes) {#,posTypeWant = 'beg') {
     positionType1     = paste(positionTypePrint,'beg',sep='')
     positionType2     = paste(positionTypePrint,'end',sep='')
     
-#    mydf = mydf[order(mydf[,'cluster'],mydf[,positionType1], mydf[,positionType2]),]; mydf$y = seq(1,dim(mydf)[1])
+#    my.df = my.df[order(my.df[,'cluster'],my.df[,positionType1], my.df[,positionType2]),]; my.df$y = seq(1,dim(my.df)[1])
     posTypes = c(positionType1,positionType2)
     for (posTypesInd in seq(1,length(posTypes))) {
       posType1 = posTypes[posTypesInd]
@@ -757,8 +776,8 @@ re.sc = function(mydf,mysc,positionTypes,testTypes) {#,posTypeWant = 'beg') {
       } else if (grepl("end",posType2)) {
         posType2 = gsub("end","beg",posType2,perl=T)
       }
-      mydf = mydf[order(mydf[,'cluster'],mydf[,posType1],mydf[,posType2]),]
-      mydf$y = seq(1,dim(mydf)[1])
+      my.df = my.df[order(my.df[,'cluster'],my.df[,posType1],my.df[,posType2]),]
+      my.df$y = seq(1,dim(my.df)[1])
       
       
       for (testTypesInd in seq(1,size(testTypes))) {
@@ -766,18 +785,18 @@ re.sc = function(mydf,mysc,positionTypes,testTypes) {#,posTypeWant = 'beg') {
         pval.varname = paste(posType1,'.',testType,'.pval',sep='')
         varname = paste(posType1,'.',testType,'.sig.coords',sep='')
         print(varname)
-        mydf[,varname] = 0
-        d1 = print(defined(mysc[mysc$positionType == posType1,]$testType))
-        d2 = print(defined(mysc[mysc$positionType == posType1 & mysc$testType == testType,]$testType))
+        my.df[,varname] = 0
+        d1 = print(defined(my.sc[my.sc$positionType == posType1,]$testType))
+        d2 = print(defined(my.sc[my.sc$positionType == posType1 & my.sc$testType == testType,]$testType))
         #if (d1 == TRUE & d2 == TRUE) {
-        if (defined(mysc[mysc$positionType == posType1 & mysc$testType == testType,]$testType)) {
-          mysc.sub = mysc[mysc$positionType == posType1 & mysc$testType == testType,]
-          for (i in seq(1,dim(mysc.sub)[1])) {
-            mydf[mydf$y >= mysc.sub$y0[i] & mydf$y <= mysc.sub$y1[i],varname] = 1
-            #mydf[mydf[,pval.varname] < 0.5,varname] = 0
+        if (defined(my.sc[my.sc$positionType == posType1 & my.sc$testType == testType,]$testType)) {
+          my.sc.sub = my.sc[my.sc$positionType == posType1 & my.sc$testType == testType,]
+          for (i in seq(1,dim(my.sc.sub)[1])) {
+            my.df[my.df$y >= my.sc.sub$y0[i] & my.df$y <= my.sc.sub$y1[i],varname] = 1
+            #my.df[my.df[,pval.varname] < 0.5,varname] = 0
             
             if (testType == 'unif' & posType1 == 'meanbeg') {
-              print(paste(posType1,testType,i,mysc.sub$y0[i],mysc.sub$y1[i]))
+              print(paste(posType1,testType,i,my.sc.sub$y0[i],my.sc.sub$y1[i]))
             }
           }
         }
@@ -785,7 +804,7 @@ re.sc = function(mydf,mysc,positionTypes,testTypes) {#,posTypeWant = 'beg') {
     }
   }
   
-#  mydf = mydf[order(mydf$cluster,mydf$meanbeg, mydf$meanend),]; mydf$y = seq(1,dim(mydf)[1])
+#  my.df = my.df[order(my.df$cluster,my.df$meanbeg, my.df$meanend),]; my.df$y = seq(1,dim(my.df)[1])
   for (positionTypesInd in seq(1,length(positionTypes))) {
     positionType      = positionTypes[positionTypesInd]
     
@@ -802,8 +821,8 @@ re.sc = function(mydf,mysc,positionTypes,testTypes) {#,posTypeWant = 'beg') {
       } else if (grepl("end",posType2)) {
         posType2 = gsub("end","beg",posType2,perl=T)
       }
-      mydf = mydf[order(mydf[,'cluster'],mydf[,posType1],mydf[,posType2]),]
-      mydf$y = seq(1,dim(mydf)[1])
+      my.df = my.df[order(my.df[,'cluster'],my.df[,posType1],my.df[,posType2]),]
+      my.df$y = seq(1,dim(my.df)[1])
       
       
       pval.varname.best = paste(posType1,'.pval.best',sep='')
@@ -817,12 +836,12 @@ re.sc = function(mydf,mysc,positionTypes,testTypes) {#,posTypeWant = 'beg') {
         pval.varname = paste(posType1,'.',testType,'.pval',sep='')
         varname = paste(posType1,'.',testType,'.sig.coords',sep='')
         print(varname)
-        if (defined(mydf[,pval.varname])) {
+        if (defined(my.df[,pval.varname])) {
           varnames = c(varnames,varname)
           if (testInd == 1) {
-            testdm = data.frame(varname=mydf[,pval.varname])
+            testdm = data.frame(varname=my.df[,pval.varname])
           } else {
-            testdm = cbind(testdm,data.frame(varname=mydf[,pval.varname]))
+            testdm = cbind(testdm,data.frame(varname=my.df[,pval.varname]))
           }
           testInd = testInd + 1
 
@@ -831,8 +850,8 @@ re.sc = function(mydf,mysc,positionTypes,testTypes) {#,posTypeWant = 'beg') {
       }
       colnames(testdm) = paste(posType1,'.',testTypes,'.sig.coords',sep='')
       if (defined(testdm)) {
-        mydf[,pval.varname.best] = apply(testdm,1,max)
-        mydf[,varname.best] = apply(testdm,1,function(x) {varnames[x == max(x)][2]})
+        my.df[,pval.varname.best] = apply(testdm,1,max)
+        my.df[,varname.best] = apply(testdm,1,function(x) {varnames[x == max(x)][2]})
       }    
       
     }
@@ -854,8 +873,8 @@ re.sc = function(mydf,mysc,positionTypes,testTypes) {#,posTypeWant = 'beg') {
       } else if (grepl("end",posType2)) {
         posType2 = gsub("end","beg",posType2,perl=T)
       }
-      mydf = mydf[order(mydf[,'cluster'],mydf[,posType1],mydf[,posType2]),]
-      mydf$y = seq(1,dim(mydf)[1])
+      my.df = my.df[order(my.df[,'cluster'],my.df[,posType1],my.df[,posType2]),]
+      my.df$y = seq(1,dim(my.df)[1])
       
       
       pval.varname.best = paste(posType1,'.pval.best',sep='')
@@ -865,19 +884,19 @@ re.sc = function(mydf,mysc,positionTypes,testTypes) {#,posTypeWant = 'beg') {
         testType = testTypes[testTypesInd]
         pval.varname = paste(posType1,'.',testType,'.pval',sep='')
         varname = paste(posType1,'.',testType,'.sig.coords',sep='')
-        mydf[mydf[,pval.varname] != mydf[,pval.varname.best],varname] = 0
-        mydf[mydf[,pval.varname] != mydf[,pval.varname.best],pval.varname] = 0
+        my.df[my.df[,pval.varname] != my.df[,pval.varname.best],varname] = 0
+        my.df[my.df[,pval.varname] != my.df[,pval.varname.best],pval.varname] = 0
       }
     }
   }
   
-  head(mydf)
+  head(my.df)
 
-  #myscbackup = mysc
-  #mysc = myscbackup
-  mysc = data.frame()
+  #my.scbackup = my.sc
+  #my.sc = my.scbackup
+  my.sc = data.frame()
   
-  #mydf = mydf[order(mydf$cluster,mydf$meanbeg, mydf$meanend),]; mydf$y = seq(1,dim(mydf)[1])
+  #my.df = my.df[order(my.df$cluster,my.df$meanbeg, my.df$meanend),]; my.df$y = seq(1,dim(my.df)[1])
   
   for (positionTypesInd in seq(1,length(positionTypes))) {
     positionType      = positionTypes[positionTypesInd]
@@ -886,7 +905,7 @@ re.sc = function(mydf,mysc,positionTypes,testTypes) {#,posTypeWant = 'beg') {
     positionType1     = paste(positionTypePrint,'beg',sep='')
     positionType2     = paste(positionTypePrint,'end',sep='')
     
-#    mydf = mydf[order(mydf[,'cluster'],mydf[,positionType1], mydf[,positionType2]),]; mydf$y = seq(1,dim(mydf)[1])
+#    my.df = my.df[order(my.df[,'cluster'],my.df[,positionType1], my.df[,positionType2]),]; my.df$y = seq(1,dim(my.df)[1])
     posTypes = c(positionType1,positionType2)
     for (posTypesInd in seq(1,length(posTypes))) {
       posType1 = posTypes[posTypesInd]
@@ -896,40 +915,40 @@ re.sc = function(mydf,mysc,positionTypes,testTypes) {#,posTypeWant = 'beg') {
       } else if (grepl("end",posType2)) {
         posType2 = gsub("end","beg",posType2,perl=T)
       }
-      mydf = mydf[order(mydf[,'cluster'],mydf[,posType1],mydf[,posType2]),]
-      mydf$y = seq(1,dim(mydf)[1])
+      my.df = my.df[order(my.df[,'cluster'],my.df[,posType1],my.df[,posType2]),]
+      my.df$y = seq(1,dim(my.df)[1])
       
       pval.varname.best = paste(posType1,'.pval.best',sep='')
       varname.best = paste(posType1,'sig.coords.best',sep='')
       #   testdm.name = data.frame()
-      myXmin = 0
-      myXmax = 25
+      my.Xmin = 0
+      my.Xmax = 25
       for (testTypesInd in seq(1,size(testTypes))) {
         print(paste(posTypesInd,posTypes[posTypesInd],testTypesInd,testTypes[testTypesInd]))
         testType = testTypes[testTypesInd]
         pval.varname = paste(posType1,'.',testType,'.pval',sep='')
         varname = paste(posType1,'.',testType,'.sig.coords',sep='')
         
-        if (defined(mydf[mydf[,varname] != 0,])) {
-          test6 = mydf[mydf[,varname] != 0,]
-        #test6 = mydf[mydf$meanbeg.unif.sig.coords != 0,]
+        if (defined(my.df[my.df[,varname] != 0,])) {
+          test6 = my.df[my.df[,varname] != 0,]
+        #test6 = my.df[my.df$meanbeg.unif.sig.coords != 0,]
         #[test6$meanbeg.unif.sig.coords != 0,]
-          myedge6 = findedge(test6$y)
-          myseq6 = data.frame()
+          my.edge6 = findedge(test6$y)
+          my.seq6 = data.frame()
           print('here3')
-          for (i in 1:(size(myedge6)-1)) {
-            myseq6 = rbind(
-              myseq6,
+          for (i in 1:(size(my.edge6)-1)) {
+            my.seq6 = rbind(
+              my.seq6,
               data.frame(
                 positionType = posType1,
                 testType = testType,
-                cluster = test6[myedge6[i]+1,]$cluster,
-                x0end=test6[myedge6[i]+1,posType1],
-                y0end=test6[myedge6[i]+1,posType2],
-                x1beg=test6[myedge6[i+1],posType1],
-                y1beg=test6[myedge6[i+1],posType2],
-                y0 = test6[myedge6[i]+1,]$y,
-                y1 = test6[myedge6[i+1],]$y,
+                cluster = test6[my.edge6[i]+1,]$cluster,
+                x0end=test6[my.edge6[i]+1,posType1],
+                y0end=test6[my.edge6[i]+1,posType2],
+                x1beg=test6[my.edge6[i+1],posType1],
+                y1beg=test6[my.edge6[i+1],posType2],
+                y0 = test6[my.edge6[i]+1,]$y,
+                y1 = test6[my.edge6[i+1],]$y,
                 xmin = 0, xmax=25, x = 0, y = 0
               )
               
@@ -938,11 +957,11 @@ re.sc = function(mydf,mysc,positionTypes,testTypes) {#,posTypeWant = 'beg') {
             i = i + 1
           }
           print('here5')
-          mysc = rbind(mysc,myseq6)
+          my.sc = rbind(my.sc,my.seq6)
         }
         print('here6')
-        myXmin = myXmin + 50
-        myXmax = myXmax + 50
+        my.Xmin = my.Xmin + 50
+        my.Xmax = my.Xmax + 50
       }
       print('here7')
 
@@ -950,13 +969,13 @@ re.sc = function(mydf,mysc,positionTypes,testTypes) {#,posTypeWant = 'beg') {
     print('here8')
   }
 
-  return(mysc)
+  return(my.sc)
 }
 
-CLUSTFILES  = myorder(paste('resources/misc/',dir("./resources/misc/","*final*.RDS"),sep=''))
-PEAKFILES  = myorder(paste('resources/peaks/',dir("./resources/peaks/","*.BED"),sep=''))
-BEDFILES   = myorder(paste('resources/bed/',dir("./resources/bed/","*.bed$"),sep=''))
-FASTAFILES = myorder(paste('resources/fa/',dir("./resources/fa/","*.fa"),sep=''))
+CLUSTFILES  = my.order(paste('resources/misc/',dir("./resources/misc/","*final*.RDS"),sep=''))
+PEAKFILES  = my.order(paste('resources/peaks/',dir("./resources/peaks/","*.BED"),sep=''))
+BEDFILES   = my.order(paste('resources/bed/',dir("./resources/bed/","*.bed$"),sep=''))
+FASTAFILES = my.order(paste('resources/fa/',dir("./resources/fa/","*.fa"),sep=''))
 
 parseBEDFile(debug=T)
 parsePEAKFile(debug=T)
@@ -970,11 +989,11 @@ BEDS    = MAIN$BED
 PEAKS   = MAIN$PEAK
 FASTAS  = MAIN$FASTA
 
-mypar = list(
-  'genes'=myorder(unique(PEAKS$gene)),
-  'treats'=myorder(unique(PEAKS$treat)),
-  'VRs'=myorder(unique(PEAKS$VR)),
-  'thres'=myorder(unique(PEAKS$thres)),
-  'peaktypes'=myorder(unique(PEAKS$peaktype))
+my.par = list(
+  'genes'=my.order(unique(PEAKS$gene)),
+  'treats'=my.order(unique(PEAKS$treat)),
+  'VRs'=my.order(unique(PEAKS$VR)),
+  'thres'=my.order(unique(PEAKS$thres)),
+  'peaktypes'=my.order(unique(PEAKS$peaktype))
 )
 

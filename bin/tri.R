@@ -1,16 +1,15 @@
 source("lib/tri_lib.R")
-library(pdfCluster)
 #CLUSTFILES, PEAKFILES, BEDFILES, FASTAFILES, 
 #CLUSTS, PEAKS, BEDS, FASTAS
 #slice_df
+#gp.lib
 
 head(PEAKS)
-mypar$treats
-mypar$genes
-mypar$thres
+my.par$treats
+my.par$genes
+my.par$thres
 
-
-gp = list(
+gp = gp.check_gp(gp1=list(
   minX = 0,
   minY = 0,
   maxX = 3000,
@@ -24,24 +23,29 @@ gp = list(
   dist.test_min.length = 5,
   dist.test_min.unique = 2,
   dist.test_max.unique.hots = 2,
-  divby=25
-)
+  divby=25,
+  C.transform=FALSE,
+  use_clusterFile = FALSE
+),gp2=gp.lib,verbose=F,debug=F)
 
-myVR = 20
+names(gp)
 
-for (myVR in seq(1,31)) {
-  print(myVR)
-  myparams = list(
+gp$C.transform = TRUE
+gp$use_clusterFile= 'resources/dfclustVR20.RDS'
+my.VR = 20
+
+for (my.VR in seq(1,31)) {
+  print(my.VR)
+  my.params = list(
     gene     = 'T7_init',#_VR_20',
     treat    = 'C',
     peaktype = 'TOP',
     thres    = 0,
-    VR       = myVR
-    
+    VR       = my.VR
   )
   
-  myparams$gene = paste('T7_init_VR_',myVR,sep='')
-  myparams_regex = list(
+  my.params$gene = paste('T7_init_VR_',my.VR,sep='')
+  my.params_regex = list(
     gene = F,
     treat = F,
     peaktype = F,
@@ -49,31 +53,93 @@ for (myVR in seq(1,31)) {
     VR = F
   )
   
-  gp$mytitle = get_title(myparams=myparams)
-  gp$mytitle.wrap = wrap_title(gp$mytitle,width = 40)
-  gp$divby = triclust_get_divby(mytitle=gp$mytitle)$triclust.divby
-  gp$promoter = mybed[mybed$feature == 'T7_Promoter',]
-  # Get BED and FA sequence
-  myfa  = FASTAS[FASTAS$chr == myparams$gene,]
-  mybed = BEDS[BEDS$chr == myparams$gene,]
-  myfa$amp.beg = mybed[mybed$feature == "FW_Primer",]$beg-10
-  myfa$amp.end = mybed[mybed$feature == "RV_Primer",]$end+10
-  #myfa$amp.seq = gsub(paste('^.{',myfa$amp.beg,'}','.(.+)','.{',myfa$amp.end,'}','$'),"\\1",myfa$seq,perl=T)
-  myfa$amp.seq = myfa$seq
-  # myfapos = get_fapos(myfa)
-  # beg2 = data.frame(beg=myfapos$index,Cpos = myfapos$Cindex,begC = myfapos$Cindex,begdiff = myfapos$diff)
-  # end2 = data.frame(end=myfapos$index+1,Cpos = myfapos$Cindex - 1,endC = myfapos$Cindex-1)
-  # end2 = merge(end2,beg2,by='Cpos')
-  # end2 = rbind(end2,data.frame(Cpos=max(end2$Cpos)+1,end=max(end2$end)+1,endC=max(end2$Cpos)+1,beg=max(beg2$beg),begC=0,begdiff=1))
-  # end2 = subset(end2,select=c('end','Cpos','endC','beg','begdiff'));
-  # beg2$begpos = beg2$beg
-  # end2$endpos = end2$beg
-  # end2 = subset(end2,select=-beg)
-  # end2 = subset(end2,select=-Cpos)
-  # beg2 = subset(beg2,select=-Cpos)
-  # colnames(end2)[3] = 'enddiff'
-  # head(beg2);head(end2);
-  # tail(beg2);tail(end2);
+  # Refine gp
+  ## Get title
+  gp$my.title      = get_title(my.params=my.params)
+  gp$my.title.wrap = wrap_title(gp$my.title,width = 40)
+  
+  print(pasta('title: ',gp$my.title))
+  ## Get divby, promoter locations
+  gp$divby = triclust_get_divby(my.title=gp$my.title)$triclust.divby
+  print(pasta('divby: ',gp$divby))
+  
+  # Get PEAKS
+  df.orig     = slice_df(PEAKS, my.params = my.params,my.params_regex=my.params_regex)
+  
+  # Get Cluster
+  if (!defined(gp$use_clusterFile)) {
+    dfclust.orig = slice_CLUSTS(df,CLUSTS);
+    #saveRDS(dfclust.orig,file=pasta('resources/dfclustVR',myparams$VR,'.RDS'))
+  } else {
+    cat("Using",gp$use_clusterFile,'\n')
+    dfclust.orig = readRDS(gp$use_clusterFile)
+  }
+  
+  # Get BED features
+  my.bed.orig = BEDS[BEDS$chr == my.params$gene,]
+  # Get FA sequence
+  my.fa.orig  = FASTAS[FASTAS$chr == my.params$gene,]
+
+  ## Get FA Cytosine Positions
+  my.fa.orig$amp.beg = my.bed.orig[my.bed.orig$feature == "FW_Primer",]$beg-10
+  my.fa.orig$amp.end = my.bed.orig[my.bed.orig$feature == "RV_Primer",]$end+10
+  my.fa.orig$amp.seq = my.fa.orig$seq
+  
+  #my.fa.orig.c = fa.get_CytosinePosition(my.fa.orig)
+
+  if (gp$C.transform == TRUE) {
+    my.fa       = my.fa.orig
+    df          = transform_index_into_Cindex(df.orig     , my.fa, c('beg','end'),verbose=T) # df transform into df.c
+    dfclust     = transform_index_into_Cindex(dfclust.orig, my.fa, c('x0end','y0end','x0beg','y0beg','x1end','y1end','x1beg','y1beg'),verbose=T)
+    my.bed      = transform_index_into_Cindex(my.bed.orig , my.fa, c('beg','end'),verbose=T) 
+    gp$maxX     = 1000
+  } else {
+    my.fa       = my.fa.orig
+    df          = df.orig
+    dfclust     = dfclust.orig
+    my.bed      = my.bed.orig
+    gp$maxX     = gp.lib$maxX
+  }
+  
+  gp$promoter = my.bed[my.bed$feature == 'T7_Promoter',]
+  
+  
+  df$index = seq(1,dim(df)[1])
+  df$cluster = 0
+  df$y = seq(1,dim(df)[1])
+  
+
+  df = df[order(df$beg, df$end),]; df$y = seq(1,dim(df)[1])
+  df$meanbeg = df$beg
+  
+  df = df[order(df$end, df$beg),]; df$y = seq(1,dim(df)[1])
+  df$meanend = df$end
+  
+  smdf(df)
+  
+  df$begI = df$beg #ai(df$beg / gp$divby)
+  df$endI = df$end #ai(df$end / gp$divby)
+  df$begcluster = 0
+  df$endcluster =0 
+  
+  
+  df = df[order(df$beg, df$end),]; df$y = seq(1,dim(df)[1])
+  p1.beg.orig = ps(df,'beg',gp=gp,print=F,group='cluster',my.bed=my.bed,my.title=paste(gp$my.title.wrap,'Sorted by R-loop Beg'))
+  
+  df = df[order(df$end, df$beg),]; df$y = seq(1,dim(df)[1])
+  p1.end.orig = ps(df,'end',gp=gp,print=F,group='cluster',my.bed=my.bed,my.title=paste(gp$my.title.wrap,'Sorted by R-loop End'))
+
+  df = get_cluster(df = df, dfclust = dfclust)
+  
+  df = df[order(df$cluster,df$beg, df$end),]; df$y = seq(1,dim(df)[1])
+  p1.beg.clust = ps(df,'beg',gp=gp,print=F,group='cluster',my.bed=my.bed,my.title=paste(gp$my.title.wrap,'Clustered & Sorted by R-loop End'))
+  
+  df = df[order(df$cluster,df$end, df$beg),]; df$y = seq(1,dim(df)[1])
+  p1.end.clust = ps(df,'end',gp=gp,print=F,group='cluster',my.bed=my.bed,my.title=paste(gp$my.title.wrap,'Clustered & Sorted by R-loop End'))
+  
+  p1 = grid.arrange(p1.beg.orig,p1.end.orig,p1.beg.clust,p1.end.clust)
+
+  
   doclust = function(df) {
     begs = aggregate(df$beg,by=list(df$begcluster),min);colnames(begs) = c('begcluster','begmin')
     ends = aggregate(df$end,by=list(df$begcluster),min);colnames(ends) = c('begcluster','endmin')
@@ -119,29 +185,16 @@ for (myVR in seq(1,31)) {
     return(res)
   }
   
-  #[order(df[df$beg >= 400 & df$beg <= 500,'beg']),] #,n=20)
-  #myfa$seq = gsub()
-  # Get PEAKS
-  df = slice_df(PEAKS, myparams = myparams,myparams_regex=myparams_regex)
-  df$index = seq(1,dim(df)[1])
-  df$meanbeg = df$beg
-  df$meanend = df$end
-  df$begI = df$beg #ai(df$beg / gp$divby)
-  df$endI = df$end #ai(df$end / gp$divby)
-  df$cluster = 0
-  df$y = seq(1,dim(df)[1])
-  df$begcluster = 0
-  df$endcluster =0 
   
-  #mycluster
-  myclust.annot = function(df,dfclust) {
+  #my.cluster
+  my.clust.annot = function(df,dfclust,divby) {
     if (defined(dfclust[dfclust$type == 'beg',])) {
       dfclustbeg = dfclust[dfclust$type == 'beg',]
       dfclustbeg$beg = dfclustbeg$pos
       dfclustbeg$cluster = seq(1,size(dfclustbeg))
       for (i in 1:size(dfclustbeg)) {
-        if (defined(df[ai(df$beg/gp$divby) >= dfclustbeg$beg[i],])) {
-          df[ai(df$beg/gp$divby) >= dfclustbeg$beg[i],]$begcluster = dfclustbeg$cluster[i]
+        if (defined(df[ai(df$beg/divby) >= dfclustbeg$beg[i],])) {
+          df[ai(df$beg/divby) >= dfclustbeg$beg[i],]$begcluster = dfclustbeg$cluster[i]
         }
       }
       # df = df[order(df$begcluster,df$beg, df$end),]; df$y = seq(1,dim(df)[1])
@@ -152,8 +205,8 @@ for (myVR in seq(1,31)) {
       dfclustend$end = dfclustend$pos+1
       dfclustend$cluster = seq(1,size(dfclustend))
       for (i in 1:size(dfclustend)) {
-        if (defined(df[ai(df$end/gp$divby) >= dfclustend$end[i],])) {
-          df[ai(df$end/gp$divby) >= dfclustend$end[i],]$endcluster = dfclustend$cluster[i]
+        if (defined(df[ai(df$end/divby) >= dfclustend$end[i],])) {
+          df[ai(df$end/divby) >= dfclustend$end[i],]$endcluster = dfclustend$cluster[i]
         }
       }
     }
@@ -161,88 +214,46 @@ for (myVR in seq(1,31)) {
   }
   # df = df[order(df$endcluster,df$end, df$end),]; df$y = seq(1,dim(df)[1])
   # ps(df,'end',gp=gp,print=T,group='endcluster')
-  mythres = ai(sqrt(size(df)/9230)*100)
-
-  myclust = get_dm3(dm2 = df,divby = gp$divby,threshold = mythres)
-  mydf= myclust.annot(df,myclust)
-  mres = doclust(mydf)
+  my.thres = ai(sqrt(size(df)/9230)*100)
+  my.thres
+  my.clust = get_dm3(dm2 = df,divby = gp$divby/8,threshold = my.thres)
+  my.df= my.clust.annot(df,my.clust,divby=gp$divby/8)
+  my.clust
+  mres = doclust(my.df)
   dfm = mres$df
   dfmclust = mres$allcluster
+  dfmclust$cluster = dfmclust$allcluster.name
+  sanity_check(size(dfm) > 0,size(dfm),verbose = T)
+  sanity_check(size(unique(dfmclust$cluster)) > 0,size(dfk),verbose = T)
   
-  
+  ptest1 = ggplot.xy(df,dfclust,gp,print=F)
+  ptest2 = ggplot.xy(dfm,dfmclust,gp,print=F)
+  grid.arrange(ptest1,ptest2,nrow=1,ncol=2)
   #pdf cluster
   dfp = df
-  dfp$begcluster = groups(pdfCluster(data.frame(beg=dfp$beg)))#,bwtype='adaptive'))
-  
-  dfp$endcluster = groups(pdfCluster(data.frame(end=dfp$end),n.grid=15))#,bwtype='adaptive'))
+  dfp$begcluster = pdfCluster::groups(pdfCluster(data.frame(beg=dfp$beg)))#,bwtype='adaptive'))
+  dfp$endcluster = pdfCluster::groups(pdfCluster(data.frame(end=dfp$end)))#,n.grid=15))#,bwtype='adaptive'))
   pres = doclust(dfp)
   dfp = pres$df
   dfpclust = pres$allcluster
-
+  sanity_check(size(dfp) > 0,size(dfp),verbose = T)
   #  dfp$begcluster = 
   #kmeans cluster
   dfk = df
-  dfk$begcluster = kmeans(dfk$beg,7)$cluster
+  dfk$begcluster = kmeans(dfk$beg,5)$cluster
   dfk$endcluster = kmeans(dfk$end,5)$cluster
   kres = doclust(dfk)
   dfk = kres$df
   dfkclust = kres$allcluster
+  sanity_check(size(dfk) > 0,size(dfk),verbose = T)
   
-  get_colorgroup = function(df,dfclust) {
-    tempz = df
-    tempzclust = dfclust
-    tempz$cluster = tempz$allcluster.name
-    tempz = get_y(tempz[order(tempz$cluster,tempz$beg,tempz$end),])
-    
-    colzbin = c('Greens','Reds','YlOrBr','Purples','Blues','RdPu')
-    colzs = rep(colzbin,10)
-    colzs2 = c(rgb(0.25,0.25,0.25))
-    for (i in 1:size(colzs)) {
-      if (i == 1) {
-        plot(x=c(1,100),y=c(1,100),col=colzs2[0],type='l',lwd=5,xlim=c(1,100),ylim=c(1,100));
-      }
-      colz = colzs[i]
-      colzdf = rep(brewer.pal(9,colz)[3:9],3) 
-      if (i == 1) {
-        colzs2 = c(rgb(0.25,0.25,0.25),colzdf) #as.data.frame(t(colzdf))
-      }
-      else {
-        colzs2 = c(colzs2,colzdf) #rbind(colzs2,t(colzdf))
-      }
-      lines(x=c(1+i,i+1+100),y=c(1,100),col=colzs2[i],type='l',lwd=5)
-    }
-    #colzs2 = c(rgb(0.25,0.25,0.25),colzs2)#,rgb(0.5,0.5,0.5))
-    
-    ind=1
-    for (i in seq(2,size(colzs2),21)) {#(22+20)) {
-      if (ind == 1) {
-        plot(x=c(1,100),y=c(1,100),col=colzs2[1],type='l',lwd=5,xlim=c(1,100),ylim=c(1,100));
-      }
-      ind = ind + 1
-      lines(x=c(1+i,i+1+100),y=c(1,100),col=colzs2[i],type='l',lwd=5)
-    }
-      lines(x=c(1+24,24+1+100),y=c(1,100),col=colzs2[24],type='l',lwd=5)
-    
-    colzs2 = c(rgb(0.25,0.25,0.25),colzs2)#,rgb(0.5,0.5,0.5))
-    mybreak = c(0,seq(1,size(colzs2)))#,-2)
-    tempzclust$begc = ai((tempzclust$x0end-gp$promoter$beg) / 100)
-    tempzclust$endc = ai((tempzclust$y1beg-gp$promoter$beg) / 100)
-    if (defined(tempzclust[tempzclust$endc < 0,])) {tempzclust[tempzclust$endc < 0,]$endc = 0}
-    if (defined(tempzclust[tempzclust$endc > 21,])) {tempzclust[tempzclust$endc > 21,]$endc = 21}
-    tempzclust$endc2 = ai(tempzclust$endc) + 1
-    tempzclust$colorgroup = tempzclust$begc * 21 + tempzclust$endc2
-    tempzclust[tempzclust$colorgroup <= 0,]$colorgroup = 0
-    tempz2 = merge(tempz,subset(tempzclust,select=c('allcluster.name','colorgroup')),by='allcluster.name')
-    return(list(df=tempz2,dfclust=tempzclust))
-  }
+  dfmlist2 = get_colorgroup(dfm,dfmclust,gp)
+  dfklist2 = get_colorgroup(dfk,dfkclust,gp)
+  dfplist2 = get_colorgroup(dfp,dfpclust,gp)
   
-  dfmlist2 = get_colorgroup(dfm,dfmclust)
-  dfklist2 = get_colorgroup(dfk,dfkclust)
-  dfplist2 = get_colorgroup(dfp,dfpclust)
-  #dfclust = aggregate(dfclust$)
-  graph.clust(dfmlist2$df,dfmlist2$dfclust,paste('results/clustby/',gp$mytitle,'_mythres.pdf',sep=''),gp,'colorgroup')
-  graph.clust(dfklist2$df,dfklist2$dfclust,paste('results/clustby/',gp$mytitle,'_kmeans5.pdf',sep=''),gp,'colorgroup')
-  graph.clust(dfplist2$df,dfplist2$dfclust,paste('results/clustby/',gp$mytitle,'_pdfclust.pdf',sep=''),gp,'colorgroup')
+  graph.clust(dfmlist2$df,dfmlist2$dfclust,paste('results/clustby/',gp$my.title,'_mythres.pdf' ,sep=''),gp,'colorgroup',my.bed = my.bed)
+  graph.clust(dfklist2$df,dfklist2$dfclust,paste('results/clustby/',gp$my.title,'_kmeans5.pdf' ,sep=''),gp,'colorgroup',my.bed = my.bed)
+  graph.clust(dfplist2$df,dfplist2$dfclust,paste('results/clustby/',gp$my.title,'_pdfclust.pdf',sep=''),gp,'colorgroup',my.bed = my.bed)
   next
   #segments(0,0,2500,2500)
   
@@ -293,7 +304,7 @@ for (myVR in seq(1,31)) {
   rect(endz4a,rep(-1,length(endz4a)),endz4b,rep(0,length(endz4b)))
   points(test4end[,'end'],test3beg$perc.smooth,col='blue2',pch=15,cex=0.5)
   get_edge_wrapper = function(test2beg,type,threshold) {
-    mysum = sum(test1$count)
+    my.sum = sum(test1$count)
     colnames(test2end) = c('end','sum')
     test2end$perc = ai(test2end$sum/sum(test2end$sum)*1000)/10
     test2end$perc.smooth = smooth.spline(test2end$perc,spar=0.4)$y
@@ -478,16 +489,16 @@ for (myVR in seq(1,31)) {
   
   positionTypes = c('mean')#orig') #orig, mean
   testTypes = c('unif','hots','norm')
-  mylist = do_distributionTests(df, positionTypes = positionTypes, testTypes = testTypes, gp = gp)
-  mydf = mylist$df
-  mysc = mylist$misc$sig.coords
+  my.list = do_distributionTests(df, positionTypes = positionTypes, testTypes = testTypes, gp = gp)
+  my.df = my.list$df
+  my.sc = my.list$misc$sig.coords
   
-  mydf = annot.pvar(mydf,mysc)
-  mysc = re.sc(mydf,mysc,positionTypes,testTypes)
-  mydf = annot.pvar(mydf,mysc)
-  head(mydf)
-  head(mysc)
-  #ggplot.xy(df = mydf,dfclust = dfclust)
+  my.df = annot.pvar(my.df,my.sc)
+  my.sc = re.sc(my.df,my.sc,positionTypes,testTypes)
+  my.df = annot.pvar(my.df,my.sc)
+  head(my.df)
+  head(my.sc)
+  #ggplot.xy(df = my.df,dfclust = dfclust)
   
   
   posType1 = 'meanbeg'
@@ -496,27 +507,27 @@ for (myVR in seq(1,31)) {
   positionType2 = 'meanend'
   
   yvar.meanbeg = paste('y.',positionType1,sep='')
-  mydftemp.meanbeg = mydf[order(mydf$cluster,mydf[,positionType1],mydf[,positionType2]),];
-  mydftemp.meanbeg[,yvar.meanbeg] = seq(1,dim(mydftemp.meanbeg)[1])
-  mysc.meanbeg = mysc[mysc$positionType == positionType1,]
-  unif.meanbeg = mysc[mysc$positionType == positionType1 & mysc$testType == 'unif',]
+  my.dftemp.meanbeg = my.df[order(my.df$cluster,my.df[,positionType1],my.df[,positionType2]),];
+  my.dftemp.meanbeg[,yvar.meanbeg] = seq(1,dim(my.dftemp.meanbeg)[1])
+  my.sc.meanbeg = my.sc[my.sc$positionType == positionType1,]
+  unif.meanbeg = my.sc[my.sc$positionType == positionType1 & my.sc$testType == 'unif',]
   yvar.meanend = paste('y.',positionType2,sep='')
-  mydftemp.meanend = mydf[order(mydf$cluster,mydf[,positionType2],mydf[,positionType1]),];
-  mydftemp.meanend[,yvar.meanend] = seq(1,dim(mydftemp.meanend)[1])
-  mysc.meanend = mysc[mysc$positionType == positionType2,]
-  unif.meanend = mysc[mysc$positionType == positionType2 & mysc$testType == 'unif',]
+  my.dftemp.meanend = my.df[order(my.df$cluster,my.df[,positionType2],my.df[,positionType1]),];
+  my.dftemp.meanend[,yvar.meanend] = seq(1,dim(my.dftemp.meanend)[1])
+  my.sc.meanend = my.sc[my.sc$positionType == positionType2,]
+  unif.meanend = my.sc[my.sc$positionType == positionType2 & my.sc$testType == 'unif',]
   
-  mycolors = c(brewer.pal(9,"Set1"),brewer.pal(9,"Set3"))
-  mybreaks = seq(0,length(mycolors)-1)
+  my.colors = c(brewer.pal(9,"Set1"),brewer.pal(9,"Set3"))
+  my.breaks = seq(0,length(my.colors)-1)
   
   
-  p0.meanbeg.c.mydf = ggplot(mydftemp.meanbeg,aes(beg,end)) +
+  p0.meanbeg.c.my.df = ggplot(my.dftemp.meanbeg,aes(beg,end)) +
     geom_point(aes(color=af(cluster)),pch='.') + theme_bw() +
     #  geom_point(color='black',pch='.') + theme_bw() +
     coord_cartesian(xlim=c(0,3000),ylim=c(0,3000)) +  
     annotate(geom='segment',x=0,y=0,xend=3000,yend=3000) + theme(legend.position='none')
   
-  p1.meanbeg.c.mydf = ggplot(mydftemp.meanbeg,aes(beg,end)) +
+  p1.meanbeg.c.my.df = ggplot(my.dftemp.meanbeg,aes(beg,end)) +
     geom_point(aes(color=af(cluster)),pch='.') + theme_bw() +
     coord_cartesian(xlim=c(0,3000),ylim=c(0,3000)) +
     #  geom_rect(data=unif.meanbeg,aes(x=0,y=0,xmin=x0end,xmax=x1beg,ymin=y0end,ymax=y1beg,color=af(cluster)),fill=rgb(0,0,0,0)) +
@@ -525,42 +536,42 @@ for (myVR in seq(1,31)) {
     geom_rect(data=dfclust,aes(x=x0end,y=y0end,xmin=x0end,ymin=y0end,xmax=x1beg,ymax=y1beg,color=as.factor(cluster)),fill=rgb(0,0,0,0),lwd=1) +
     annotate(geom='segment',x=0,y=0,xend=3000,yend=3000) + theme(legend.position='none')
   
-  dfclust.meanbeg = aggregate(mydftemp.meanbeg$y.meanbeg,by=list(mydftemp.meanbeg$cluster),min); colnames(dfclust.meanbeg) = c("cluster","y.meanbeg.min")
-  dfclust.meanbeg$y.meanbeg.max = aggregate(mydftemp.meanbeg$y.meanbeg,by=list(mydftemp.meanbeg$cluster),max)$x
+  dfclust.meanbeg = aggregate(my.dftemp.meanbeg$y.meanbeg,by=list(my.dftemp.meanbeg$cluster),min); colnames(dfclust.meanbeg) = c("cluster","y.meanbeg.min")
+  dfclust.meanbeg$y.meanbeg.max = aggregate(my.dftemp.meanbeg$y.meanbeg,by=list(my.dftemp.meanbeg$cluster),max)$x
   dfclust.meanbeg = merge(dfclust.meanbeg,dfclust,by="cluster")
-  p2.meanbeg.c.mydf = ps(mydftemp.meanbeg,by=posType1,y.var=yvar.meanbeg,gp=gp,print=F,group='cluster') +
+  p2.meanbeg.c.my.df = ps(my.dftemp.meanbeg,by=posType1,y.var=yvar.meanbeg,gp=gp,print=F,group='cluster') +
     geom_segment(data=dfclust.meanbeg,aes(x=x0end,xend=x0end,y=y.meanbeg.min,yend=y.meanbeg.max,group=af(cluster)),color='black',lty=1) +
     #  geom_segment(data=dfclust.meanbeg,aes(x=x1beg,xend=x1beg,y=y.meanbeg.min,yend=y.meanbeg.max,group=af(cluster)),color='black',lty=2) +
     #  geom_segment(data=dfclust.meanbeg,aes(x=y0end,xend=y0end,y=y.meanbeg.min,yend=y.meanbeg.max,group=af(cluster)),color='black',lty=1) +
-    geom_rect(data = mybed[grep('VR',mybed$feature),],aes(group=0,x=0,y=0,xmin=beg,xmax=end,ymin=0,ymax=max(mydftemp.meanbeg$meanbeg)),color=rgb(0,0,0,0),fill='black',alpha=0.1) +
-    annotate(geom='text',x=700,y=max(mydftemp.meanbeg$y.meanbeg)-100,label='VR') +
+    geom_rect(data = my.bed[grep('VR',my.bed$feature),],aes(group=0,x=0,y=0,xmin=beg,xmax=end,ymin=0,ymax=max(my.dftemp.meanbeg$meanbeg)),color=rgb(0,0,0,0),fill='black',alpha=0.1) +
+    annotate(geom='text',x=700,y=max(my.dftemp.meanbeg$y.meanbeg)-100,label='VR') +
     geom_segment(data=dfclust.meanbeg,aes(x=y1beg,xend=y1beg,y=y.meanbeg.min,yend=y.meanbeg.max,group=af(cluster)),color='black',lty=2) +
     geom_text(data=dfclust.meanbeg,aes(x=x0end-100,y=(y.meanbeg.min+y.meanbeg.max)/2,label=cluster,group=af(cluster))) +
-    geom_rect(data=mysc.meanbeg[mysc.meanbeg$testType == 'unif',],aes(x=0,y=0,xmin=0  ,ymin=y0,xmax=25 ,ymax=y1,fill=af(cluster),group=af(cluster)),color='black') +
-    geom_rect(data=mysc.meanbeg[mysc.meanbeg$testType == 'norm',],aes(x=0,y=0,xmin=50 ,ymin=y0,xmax=75 ,ymax=y1,fill=af(cluster),group=af(cluster)),color='black') +
-    geom_rect(data=mysc.meanbeg[mysc.meanbeg$testType == 'hots',],aes(x=0,y=0,xmin=100,ymin=y0,xmax=125,ymax=y1,fill=af(cluster),group=af(cluster)),color='black') +
-    annotate(geom='text',x=0  ,y=max(mydftemp.meanbeg$y),label='unif',angle=45,hjust=0,vjust=0,size=4) + 
-    annotate(geom='text',x=50 ,y=max(mydftemp.meanbeg$y),label='norm',angle=45,hjust=0,vjust=0,size=4) + 
-    annotate(geom='text',x=100,y=max(mydftemp.meanbeg$y),label='hots',angle=45,hjust=0,vjust=0,size=4) + 
-    #geom_line(data=mydftemp.meanbeg,aes(x=meanbeg,y=mydftemp.meanbeg[,yvar.meanbeg],group=cluster,alpha=af(meanbeg.hots.sig.coords)),color='red4',lwd=1) +
-    geom_point(data=mydftemp.meanbeg[mydftemp.meanbeg$meanbeg.norm.sig.coords != 0,],aes(x=meanbeg,y=mydftemp.meanbeg[mydftemp.meanbeg$meanbeg.norm.sig.coords != 0,yvar.meanbeg],group=cluster),color='black',shape=15,size=0.25) +
-    geom_point(data=mydftemp.meanbeg[mydftemp.meanbeg$meanbeg.unif.sig.coords != 0,],aes(x=meanbeg,y=mydftemp.meanbeg[mydftemp.meanbeg$meanbeg.unif.sig.coords != 0,yvar.meanbeg],group=cluster),color='blue2',shape=15,size=0.5) +
-    geom_point(data=mydftemp.meanbeg[mydftemp.meanbeg$meanbeg.hots.sig.coords != 0,],aes(x=meanbeg-1,y=mydftemp.meanbeg[mydftemp.meanbeg$meanbeg.hots.sig.coords != 0,yvar.meanbeg],group=cluster),color='red4',shape=18,size=0.5) +
-    geom_point(data=mydftemp.meanbeg[mydftemp.meanbeg$meanend.norm.sig.coords != 0,],aes(x=meanend,y=mydftemp.meanbeg[mydftemp.meanbeg$meanend.norm.sig.coords != 0,yvar.meanbeg],group=cluster),color='black',shape=15,size=0.25) +
-    geom_point(data=mydftemp.meanbeg[mydftemp.meanbeg$meanend.unif.sig.coords != 0,],aes(x=meanend,y=mydftemp.meanbeg[mydftemp.meanbeg$meanend.unif.sig.coords != 0,yvar.meanbeg],group=cluster),color='blue2',shape=15,size=0.5) +
-    geom_point(data=mydftemp.meanbeg[mydftemp.meanbeg$meanend.hots.sig.coords != 0,],aes(x=meanend+1,y=mydftemp.meanbeg[mydftemp.meanbeg$meanend.hots.sig.coords != 0,yvar.meanbeg],group=cluster),color='red4',shape=18,size=0.5) +
-    #geom_line(data=mydftemp.meanbeg,aes(x=meanbeg,y=mydftemp.meanbeg[,yvar.meanbeg],group=cluster,alpha=af(meanbeg.unif.sig.coords)),color='black',lwd=0.5) + scale_alpha_manual(values=c('0'=0,'1'=1)) +
+    geom_rect(data=my.sc.meanbeg[my.sc.meanbeg$testType == 'unif',],aes(x=0,y=0,xmin=0  ,ymin=y0,xmax=25 ,ymax=y1,fill=af(cluster),group=af(cluster)),color='black') +
+    geom_rect(data=my.sc.meanbeg[my.sc.meanbeg$testType == 'norm',],aes(x=0,y=0,xmin=50 ,ymin=y0,xmax=75 ,ymax=y1,fill=af(cluster),group=af(cluster)),color='black') +
+    geom_rect(data=my.sc.meanbeg[my.sc.meanbeg$testType == 'hots',],aes(x=0,y=0,xmin=100,ymin=y0,xmax=125,ymax=y1,fill=af(cluster),group=af(cluster)),color='black') +
+    annotate(geom='text',x=0  ,y=max(my.dftemp.meanbeg$y),label='unif',angle=45,hjust=0,vjust=0,size=4) + 
+    annotate(geom='text',x=50 ,y=max(my.dftemp.meanbeg$y),label='norm',angle=45,hjust=0,vjust=0,size=4) + 
+    annotate(geom='text',x=100,y=max(my.dftemp.meanbeg$y),label='hots',angle=45,hjust=0,vjust=0,size=4) + 
+    #geom_line(data=my.dftemp.meanbeg,aes(x=meanbeg,y=my.dftemp.meanbeg[,yvar.meanbeg],group=cluster,alpha=af(meanbeg.hots.sig.coords)),color='red4',lwd=1) +
+    geom_point(data=my.dftemp.meanbeg[my.dftemp.meanbeg$meanbeg.norm.sig.coords != 0,],aes(x=meanbeg,y=my.dftemp.meanbeg[my.dftemp.meanbeg$meanbeg.norm.sig.coords != 0,yvar.meanbeg],group=cluster),color='black',shape=15,size=0.25) +
+    geom_point(data=my.dftemp.meanbeg[my.dftemp.meanbeg$meanbeg.unif.sig.coords != 0,],aes(x=meanbeg,y=my.dftemp.meanbeg[my.dftemp.meanbeg$meanbeg.unif.sig.coords != 0,yvar.meanbeg],group=cluster),color='blue2',shape=15,size=0.5) +
+    geom_point(data=my.dftemp.meanbeg[my.dftemp.meanbeg$meanbeg.hots.sig.coords != 0,],aes(x=meanbeg-1,y=my.dftemp.meanbeg[my.dftemp.meanbeg$meanbeg.hots.sig.coords != 0,yvar.meanbeg],group=cluster),color='red4',shape=18,size=0.5) +
+    geom_point(data=my.dftemp.meanbeg[my.dftemp.meanbeg$meanend.norm.sig.coords != 0,],aes(x=meanend,y=my.dftemp.meanbeg[my.dftemp.meanbeg$meanend.norm.sig.coords != 0,yvar.meanbeg],group=cluster),color='black',shape=15,size=0.25) +
+    geom_point(data=my.dftemp.meanbeg[my.dftemp.meanbeg$meanend.unif.sig.coords != 0,],aes(x=meanend,y=my.dftemp.meanbeg[my.dftemp.meanbeg$meanend.unif.sig.coords != 0,yvar.meanbeg],group=cluster),color='blue2',shape=15,size=0.5) +
+    geom_point(data=my.dftemp.meanbeg[my.dftemp.meanbeg$meanend.hots.sig.coords != 0,],aes(x=meanend+1,y=my.dftemp.meanbeg[my.dftemp.meanbeg$meanend.hots.sig.coords != 0,yvar.meanbeg],group=cluster),color='red4',shape=18,size=0.5) +
+    #geom_line(data=my.dftemp.meanbeg,aes(x=meanbeg,y=my.dftemp.meanbeg[,yvar.meanbeg],group=cluster,alpha=af(meanbeg.unif.sig.coords)),color='black',lwd=0.5) + scale_alpha_manual(values=c('0'=0,'1'=1)) +
     scale_x_continuous(breaks=seq(0,3000,100)) + scale_y_continuous(breaks=seq(0,1600,100)) + theme(legend.position='bottom') +
-    #scale_color_manual(values=mycolors,breaks=mybreaks,label=mybreaks) + 
-    scale_fill_manual(values=mycolors,breaks=mybreaks,label=mybreaks)
-  #p2.meanbeg.c.mydf
+    #scale_color_manual(values=my.colors,breaks=my.breaks,label=my.breaks) + 
+    scale_fill_manual(values=my.colors,breaks=my.breaks,label=my.breaks)
+  #p2.meanbeg.c.my.df
   
-  p0.meanend.c.mydf = ggplot(mydftemp.meanend,aes(end,beg)) +
+  p0.meanend.c.my.df = ggplot(my.dftemp.meanend,aes(end,beg)) +
     geom_point(aes(color=af(cluster)),pch='.') + theme_bw() +
     coord_cartesian(xlim=c(0,3000),ylim=c(0,3000)) +
     annotate(geom='segment',x=0,y=0,xend=3000,yend=3000) + theme(legend.position='none')
   
-  p1.meanend.c.mydf = ggplot(mydftemp.meanend,aes(end,beg)) +
+  p1.meanend.c.my.df = ggplot(my.dftemp.meanend,aes(end,beg)) +
     geom_point(aes(color=af(cluster)),pch='.') + theme_bw() +
     coord_cartesian(xlim=c(0,3000),ylim=c(0,3000)) +
     #  geom_rect(data=unif.meanend,aes(x=0,y=0,xmin=x0end,xmax=x1beg,ymin=y0end,ymax=y1beg,fill=af(cluster)),alpha=0.25,color=rgb(0,0,0,0)) +
@@ -570,8 +581,8 @@ for (myVR in seq(1,31)) {
     annotate(geom='segment',x=0,y=0,xend=3000,yend=3000) + theme(legend.position='none')
   
   
-  dfclust.meanend = aggregate(mydftemp.meanend$y.meanend,by=list(mydftemp.meanend$cluster),min); colnames(dfclust.meanend) = c("cluster","y.meanend.min")
-  dfclust.meanend$y.meanend.max = aggregate(mydftemp.meanend$y.meanend,by=list(mydftemp.meanend$cluster),max)$x
+  dfclust.meanend = aggregate(my.dftemp.meanend$y.meanend,by=list(my.dftemp.meanend$cluster),min); colnames(dfclust.meanend) = c("cluster","y.meanend.min")
+  dfclust.meanend$y.meanend.max = aggregate(my.dftemp.meanend$y.meanend,by=list(my.dftemp.meanend$cluster),max)$x
   dfclust.meanend = merge(dfclust.meanend,dfclust,by="cluster")
   # dfclust2 = aggregate(df$beg,by=list(df$cluster),min)
   # colnames(dfclust2) = c('cluster','x0end')
@@ -584,140 +595,140 @@ for (myVR in seq(1,31)) {
   # dfclust2$x1end = dfclust2$x0end
   # dfclust2$y1end = dfclust2$y1beg
   #posType2 = 'end'
-  p2.meanend.c.mydf = ps(mydftemp.meanend,by=posType2,y.var='y.meanend',gp=gp,print=F,group='cluster') +
+  p2.meanend.c.my.df = ps(my.dftemp.meanend,by=posType2,y.var='y.meanend',gp=gp,print=F,group='cluster') +
     geom_segment(data=dfclust.meanend,aes(x=x0end,xend=x0end,y=y.meanend.min,yend=y.meanend.max,group=af(cluster)),color='black',lty=1) +
     #  geom_segment(data=dfclust.meanend,aes(x=x1beg,xend=x1beg,y=y.meanend.min,yend=y.meanend.max,group=af(cluster)),color='black',lty=2) +
     #  geom_segment(data=dfclust.meanend,aes(x=y0end,xend=y0end,y=y.meanend.min,yend=y.meanend.max,group=af(cluster)),color='black',lty=1) +
-    geom_rect(data = mybed[grep('VR',mybed$feature),],aes(group=0,x=0,y=0,xmin=beg,xmax=end,ymin=0,ymax=max(mydftemp.meanend$meanend)),color=rgb(0,0,0,0),fill='black',alpha=0.1) +
-    annotate(geom='text',x=700,y=max(mydftemp.meanend$y.meanend)-100,label='VR') +
+    geom_rect(data = my.bed[grep('VR',my.bed$feature),],aes(group=0,x=0,y=0,xmin=beg,xmax=end,ymin=0,ymax=max(my.dftemp.meanend$meanend)),color=rgb(0,0,0,0),fill='black',alpha=0.1) +
+    annotate(geom='text',x=700,y=max(my.dftemp.meanend$y.meanend)-100,label='VR') +
     geom_segment(data=dfclust.meanend,aes(x=y1beg,xend=y1beg,y=y.meanend.min,yend=y.meanend.max,group=af(cluster)),color='black',lty=2) +
-    geom_rect(data=mysc.meanend[mysc.meanend$testType == 'unif',],aes(x=0,y=0,xmin=0  ,ymin=y0,xmax=25 ,ymax=y1,fill=af(cluster),group=af(cluster)),color='black') +
-    geom_rect(data=mysc.meanend[mysc.meanend$testType == 'norm',],aes(x=0,y=0,xmin=50 ,ymin=y0,xmax=75 ,ymax=y1,fill=af(cluster),group=af(cluster)),color='black') +
-    geom_rect(data=mysc.meanend[mysc.meanend$testType == 'hots',],aes(x=0,y=0,xmin=100,ymin=y0,xmax=125,ymax=y1,fill=af(cluster),group=af(cluster)),color='black') +
-    annotate(geom='text',x=0  ,y=max(mydftemp.meanend$y),label='unif',angle=45,hjust=0,vjust=0,size=4) + 
-    annotate(geom='text',x=50 ,y=max(mydftemp.meanend$y),label='norm',angle=45,hjust=0,vjust=0,size=4) + 
-    annotate(geom='text',x=100,y=max(mydftemp.meanend$y),label='hots',angle=45,hjust=0,vjust=0,size=4) +
+    geom_rect(data=my.sc.meanend[my.sc.meanend$testType == 'unif',],aes(x=0,y=0,xmin=0  ,ymin=y0,xmax=25 ,ymax=y1,fill=af(cluster),group=af(cluster)),color='black') +
+    geom_rect(data=my.sc.meanend[my.sc.meanend$testType == 'norm',],aes(x=0,y=0,xmin=50 ,ymin=y0,xmax=75 ,ymax=y1,fill=af(cluster),group=af(cluster)),color='black') +
+    geom_rect(data=my.sc.meanend[my.sc.meanend$testType == 'hots',],aes(x=0,y=0,xmin=100,ymin=y0,xmax=125,ymax=y1,fill=af(cluster),group=af(cluster)),color='black') +
+    annotate(geom='text',x=0  ,y=max(my.dftemp.meanend$y),label='unif',angle=45,hjust=0,vjust=0,size=4) + 
+    annotate(geom='text',x=50 ,y=max(my.dftemp.meanend$y),label='norm',angle=45,hjust=0,vjust=0,size=4) + 
+    annotate(geom='text',x=100,y=max(my.dftemp.meanend$y),label='hots',angle=45,hjust=0,vjust=0,size=4) +
     geom_text(data=dfclust.meanend,aes(x=x0end-100,y=(y.meanend.min+y.meanend.max)/2,label=cluster,group=af(cluster))) +
-    geom_point(data=mydftemp.meanend[mydftemp.meanend$meanend.norm.sig.coords != 0,],aes(x=meanend,y=mydftemp.meanend[mydftemp.meanend$meanend.norm.sig.coords != 0,yvar.meanend],group=cluster),color='black',shape=15,size=0.25) +
-    geom_point(data=mydftemp.meanend[mydftemp.meanend$meanend.unif.sig.coords != 0,],aes(x=meanend,y=mydftemp.meanend[mydftemp.meanend$meanend.unif.sig.coords != 0,yvar.meanend],group=cluster),color='blue2',shape=15,size=0.5) +
-    geom_point(data=mydftemp.meanend[mydftemp.meanend$meanend.hots.sig.coords != 0,],aes(x=meanend+1,y=mydftemp.meanend[mydftemp.meanend$meanend.hots.sig.coords != 0,yvar.meanend],group=cluster),color='red4',shape=18,size=0.5) +
-    geom_point(data=mydftemp.meanend[mydftemp.meanend$meanbeg.norm.sig.coords != 0,],aes(x=meanbeg,y=mydftemp.meanend[mydftemp.meanend$meanbeg.norm.sig.coords != 0,yvar.meanend],group=cluster),color='black',shape=15,size=0.25) +
-    geom_point(data=mydftemp.meanend[mydftemp.meanend$meanbeg.unif.sig.coords != 0,],aes(x=meanbeg,y=mydftemp.meanend[mydftemp.meanend$meanbeg.unif.sig.coords != 0,yvar.meanend],group=cluster),color='blue2',shape=15,size=0.5) +
-    geom_point(data=mydftemp.meanend[mydftemp.meanend$meanbeg.hots.sig.coords != 0,],aes(x=meanbeg-1,y=mydftemp.meanend[mydftemp.meanend$meanbeg.hots.sig.coords != 0,yvar.meanend],group=cluster),color='red4',shape=18,size=0.5) +
-    #geom_line(data=mydftemp.meanend,aes(x=meanend,y=mydftemp.meanend[,yvar.meanend],group=cluster,alpha=af(meanend.unif.sig.coords)),color = 'orange3',lwd=0.5) + scale_alpha_manual(values=c('0'=0,'1'=1)) +
+    geom_point(data=my.dftemp.meanend[my.dftemp.meanend$meanend.norm.sig.coords != 0,],aes(x=meanend,y=my.dftemp.meanend[my.dftemp.meanend$meanend.norm.sig.coords != 0,yvar.meanend],group=cluster),color='black',shape=15,size=0.25) +
+    geom_point(data=my.dftemp.meanend[my.dftemp.meanend$meanend.unif.sig.coords != 0,],aes(x=meanend,y=my.dftemp.meanend[my.dftemp.meanend$meanend.unif.sig.coords != 0,yvar.meanend],group=cluster),color='blue2',shape=15,size=0.5) +
+    geom_point(data=my.dftemp.meanend[my.dftemp.meanend$meanend.hots.sig.coords != 0,],aes(x=meanend+1,y=my.dftemp.meanend[my.dftemp.meanend$meanend.hots.sig.coords != 0,yvar.meanend],group=cluster),color='red4',shape=18,size=0.5) +
+    geom_point(data=my.dftemp.meanend[my.dftemp.meanend$meanbeg.norm.sig.coords != 0,],aes(x=meanbeg,y=my.dftemp.meanend[my.dftemp.meanend$meanbeg.norm.sig.coords != 0,yvar.meanend],group=cluster),color='black',shape=15,size=0.25) +
+    geom_point(data=my.dftemp.meanend[my.dftemp.meanend$meanbeg.unif.sig.coords != 0,],aes(x=meanbeg,y=my.dftemp.meanend[my.dftemp.meanend$meanbeg.unif.sig.coords != 0,yvar.meanend],group=cluster),color='blue2',shape=15,size=0.5) +
+    geom_point(data=my.dftemp.meanend[my.dftemp.meanend$meanbeg.hots.sig.coords != 0,],aes(x=meanbeg-1,y=my.dftemp.meanend[my.dftemp.meanend$meanbeg.hots.sig.coords != 0,yvar.meanend],group=cluster),color='red4',shape=18,size=0.5) +
+    #geom_line(data=my.dftemp.meanend,aes(x=meanend,y=my.dftemp.meanend[,yvar.meanend],group=cluster,alpha=af(meanend.unif.sig.coords)),color = 'orange3',lwd=0.5) + scale_alpha_manual(values=c('0'=0,'1'=1)) +
     scale_x_continuous(breaks=seq(0,3000,100)) + scale_y_continuous(breaks=seq(0,1600,100)) + theme(legend.position='bottom') +
-    #scale_color_manual(values=mycolors,breaks=mybreaks,label=mybreaks) + 
-    scale_fill_manual(values=mycolors,breaks=mybreaks,label=mybreaks)
-  #p2.meanend.c.mydf
+    #scale_color_manual(values=my.colors,breaks=my.breaks,label=my.breaks) + 
+    scale_fill_manual(values=my.colors,breaks=my.breaks,label=my.breaks)
+  #p2.meanend.c.my.df
   
-  p3.meanbeg.c.mydf = ggplot(mydftemp.meanbeg,aes(beg)) +
+  p3.meanbeg.c.my.df = ggplot(my.dftemp.meanbeg,aes(beg)) +
     geom_density(aes(color=af(meanbeg.unif.sig.coords))) + theme_bw() + coord_cartesian(xlim=c(0,3000)) + facet_grid(cluster~.) +
-    geom_density(data=mydftemp.meanbeg,aes(x = end,color=af(meanbeg.unif.sig.coords+2)),lty=1) +
-    #geom_density(data=mydftemp.meanend,aes(x = end,color=af(meanend.unif.sig.coords+2)),lty=1) +
+    geom_density(data=my.dftemp.meanbeg,aes(x = end,color=af(meanbeg.unif.sig.coords+2)),lty=1) +
+    #geom_density(data=my.dftemp.meanend,aes(x = end,color=af(meanend.unif.sig.coords+2)),lty=1) +
     scale_color_manual(values=c('1'='red4','0'='orange','3'='blue4','2'='cornflowerblue')) +
     theme(strip.text = element_blank()) +
     scale_x_continuous(breaks=seq(0,3000,100)) +
     theme(legend.position = 'none') + ylab('density') + xlab('R-loop End Position (bp)')
   
-  p3.meanend.c.mydf = ggplot(mydftemp.meanend,aes(end)) +
+  p3.meanend.c.my.df = ggplot(my.dftemp.meanend,aes(end)) +
     geom_density(aes(color=af(meanend.unif.sig.coords))) + theme_bw() + coord_cartesian(xlim=c(0,3000))+ facet_grid(cluster~.) +
-    geom_density(data=mydftemp.meanend,aes(x =beg,color=af(meanend.unif.sig.coords+2)),lty=1) +
-    #  geom_density(data=mydftemp.meanbeg,aes(x = end,color=af(meanend.unif.sig.coords+2)),lty=1) +
+    geom_density(data=my.dftemp.meanend,aes(x =beg,color=af(meanend.unif.sig.coords+2)),lty=1) +
+    #  geom_density(data=my.dftemp.meanbeg,aes(x = end,color=af(meanend.unif.sig.coords+2)),lty=1) +
     scale_color_manual(values=c('1'='red4','0'='orange','3'='blue4','2'='cornflowerblue')) +
     theme(strip.text = element_blank()) +
     scale_x_continuous(breaks=seq(0,3000,100)) +
     theme(legend.position = 'none') + ylab('density') + xlab('R-loop End Position (bp)')
   
-  p4.meanbeg.c.mydf = ggplot(mydftemp.meanbeg,aes(beg)) +
+  p4.meanbeg.c.my.df = ggplot(my.dftemp.meanbeg,aes(beg)) +
     geom_density(aes(color=af(meanbeg.unif.sig.coords))) + theme_bw() + coord_cartesian(xlim=c(0,3000)) +
-    geom_density(data=mydftemp.meanend,aes(x = end,color=af(meanend.unif.sig.coords+2)),lty=1) +
+    geom_density(data=my.dftemp.meanend,aes(x = end,color=af(meanend.unif.sig.coords+2)),lty=1) +
     scale_color_manual(values=c('1'='red4','0'='orange','3'='blue4','2'='cornflowerblue')) +
     scale_x_continuous(breaks=seq(0,3000,100)) +
     theme(legend.position = 'bottom') + ylab('density') + xlab('R-loop Start Position (bp)')
   
-  p4.meanend.c.mydf = ggplot(mydftemp.meanend,aes(end)) +
+  p4.meanend.c.my.df = ggplot(my.dftemp.meanend,aes(end)) +
     geom_density(aes(color=af(meanend.unif.sig.coords))) + theme_bw() + coord_cartesian(xlim=c(0,3000)) +
-    geom_density(data=mydftemp.meanbeg,aes(x = end,color=af(meanend.unif.sig.coords+2)),lty=1) +
+    geom_density(data=my.dftemp.meanbeg,aes(x = end,color=af(meanend.unif.sig.coords+2)),lty=1) +
     scale_color_manual(values=c('1'='red4','0'='orange','3'='blue4','2'='cornflowerblue')) +
     scale_x_continuous(breaks=seq(0,3000,100)) +
     theme(legend.position = 'bottom') + ylab('density') + xlab('R-loop End Position (bp)')
   # 
-  pdf(paste('./results/',gp$mytitle,'.pdf',sep=''),height=50,width=20)
+  pdf(paste('./results/',gp$my.title,'.pdf',sep=''),height=50,width=20)
   grid.arrange(
-    p0.meanbeg.c.mydf,p0.meanend.c.mydf,
-    p1.meanbeg.c.mydf,p1.meanend.c.mydf,
-    p2.meanbeg.c.mydf,p2.meanend.c.mydf,
-    p3.meanbeg.c.mydf,p3.meanend.c.mydf,
-    p4.meanbeg.c.mydf,p4.meanend.c.mydf,
+    p0.meanbeg.c.my.df,p0.meanend.c.my.df,
+    p1.meanbeg.c.my.df,p1.meanend.c.my.df,
+    p2.meanbeg.c.my.df,p2.meanend.c.my.df,
+    p3.meanbeg.c.my.df,p3.meanend.c.my.df,
+    p4.meanbeg.c.my.df,p4.meanend.c.my.df,
     nrow=5,ncol=2,
     heights=c(1,1,1,1,0.3)
   )
   dev.off()
   
-  pdf(paste('./results/',gp$mytitle,'_meanbeg_heatmaponly.pdf',sep=''),height=10,width=10)
-  print(p2.meanbeg.c.mydf)
+  pdf(paste('./results/',gp$my.title,'_meanbeg_heatmaponly.pdf',sep=''),height=10,width=10)
+  print(p2.meanbeg.c.my.df)
   dev.off()
-  pdf(paste('./results/',gp$mytitle,'_meanend_heatmaponly.pdf',sep=''),height=10,width=10)
-  print(p2.meanend.c.mydf)
+  pdf(paste('./results/',gp$my.title,'_meanend_heatmaponly.pdf',sep=''),height=10,width=10)
+  print(p2.meanend.c.my.df)
   dev.off()
   # 
   # pdf('VR17_p2.pdf',height=10,width=10)
-  # grid.arrange(p2.meanbeg.c.mydf,p2.meanend.c.mydf,nrow=2,ncol=2)
+  # grid.arrange(p2.meanbeg.c.my.df,p2.meanend.c.my.df,nrow=2,ncol=2)
   # dev.off()
   
-  if (myVR == 1) {
-    myperc = data.frame()
+  if (my.VR == 1) {
+    my.perc = data.frame()
   }
   df$count = 1
   dfcount = aggregate(df$count,by=list(df$cluster),sum)
   colnames(dfcount) = c('cluster','count')
   dfcount$total = sum(dfcount$count)
   dfcount$perc = as.integer(dfcount$count/ dfcount$total*1000+0.5)/10
-  dfcount$VR = myparams$VR
-  if (defined(myperc[myperc$VR == myparams$VR,])) {
-    myperc = myperc[myperc$VR != myparams$VR,]
+  dfcount$VR = my.params$VR
+  if (defined(my.perc[my.perc$VR == my.params$VR,])) {
+    my.perc = my.perc[my.perc$VR != my.params$VR,]
   }
-  myperc = rbind(myperc,dfcount)
+  my.perc = rbind(my.perc,dfcount)
 }
-#saveRDS(myperc,file='resources/myperc.RDS')
-myperc = readRDS(file='resources/myperc.RDS')
-# myperc = data.frame()
-myperc$GCperc = 0
-myperc$GCskew = 0
-myperc[grep('^(1||5||9||13||28)$',myperc$VR),]$GCperc = 0.4
-myperc[grep('^(2||6||10||14||29)$',myperc$VR),]$GCperc = 0.5
-myperc[grep('^(3||7||11||15||16||17||18||19||20||21||22||23||24||25||26||30)$',myperc$VR),]$GCperc = 0.6
-myperc[grep('^(4||8||12||27||31)$',myperc$VR),]$GCperc = 0.7
-myperc[grep('^(1||2||3||4)$',myperc$VR),]$GCskew = 0.0
-myperc[grep('^(5||6||7||8)$',myperc$VR),]$GCskew = 0.1
-myperc[grep('^(9||10||11||12)$',myperc$VR),]$GCskew = 0.2
-myperc[grep('^(13||14||15||16||17||18||19||20||21||22||23||24||25||26||27)$',myperc$VR),]$GCskew = 0.4
-myperc[grep('^(28||29||30||31)$',myperc$VR),]$GCskew = 0.6
-myperc$Gclust = 0
-myperc[grep('^(15||19||23)$',myperc$VR),]$Gclust = 2
-myperc[grep('^(16||20||24)$',myperc$VR),]$Gclust = 3
-myperc[grep('^(17||21||25)$',myperc$VR),]$Gclust = 4
-myperc$ATskew = 0
-myperc[grep('^(15||16||17||18)$',myperc$VR),]$ATskew = 0.0
-myperc[grep('^(19||20||21||22)$',myperc$VR),]$ATskew = 0.2
-myperc[grep('^(23||24||25||26)$',myperc$VR),]$ATskew = 0.4
+#saveRDS(my.perc,file='resources/my.perc.RDS')
+my.perc = readRDS(file='resources/my.perc.RDS')
+# my.perc = data.frame()
+my.perc$GCperc = 0
+my.perc$GCskew = 0
+my.perc[grep('^(1||5||9||13||28)$',my.perc$VR),]$GCperc = 0.4
+my.perc[grep('^(2||6||10||14||29)$',my.perc$VR),]$GCperc = 0.5
+my.perc[grep('^(3||7||11||15||16||17||18||19||20||21||22||23||24||25||26||30)$',my.perc$VR),]$GCperc = 0.6
+my.perc[grep('^(4||8||12||27||31)$',my.perc$VR),]$GCperc = 0.7
+my.perc[grep('^(1||2||3||4)$',my.perc$VR),]$GCskew = 0.0
+my.perc[grep('^(5||6||7||8)$',my.perc$VR),]$GCskew = 0.1
+my.perc[grep('^(9||10||11||12)$',my.perc$VR),]$GCskew = 0.2
+my.perc[grep('^(13||14||15||16||17||18||19||20||21||22||23||24||25||26||27)$',my.perc$VR),]$GCskew = 0.4
+my.perc[grep('^(28||29||30||31)$',my.perc$VR),]$GCskew = 0.6
+my.perc$Gclust = 0
+my.perc[grep('^(15||19||23)$',my.perc$VR),]$Gclust = 2
+my.perc[grep('^(16||20||24)$',my.perc$VR),]$Gclust = 3
+my.perc[grep('^(17||21||25)$',my.perc$VR),]$Gclust = 4
+my.perc$ATskew = 0
+my.perc[grep('^(15||16||17||18)$',my.perc$VR),]$ATskew = 0.0
+my.perc[grep('^(19||20||21||22)$',my.perc$VR),]$ATskew = 0.2
+my.perc[grep('^(23||24||25||26)$',my.perc$VR),]$ATskew = 0.4
 
 pdf("cluster.pdf",width=8,height=10)
-ggplot(myperc[(myperc$VR < 15 | myperc$VR == 18 | myperc$VR >= 27) & myperc$cluster != -1,],aes(af(cluster),perc)) +
+ggplot(my.perc[(my.perc$VR < 15 | my.perc$VR == 18 | my.perc$VR >= 27) & my.perc$cluster != -1,],aes(af(cluster),perc)) +
   geom_bar(aes(fill=af(GCskew)),stat='identity',position='dodge',color='black') +
   theme_bw() + xlab('Cluster') + ylab('Percent (%)') +
   coord_cartesian(ylim=c(0,100)) +
   facet_grid(af(GCperc)~.) +
   theme(legend.position = 'bottom') + scale_fill_brewer(palette = 'Set3')                                    
 
-ggplot(myperc[(myperc$VR < 15 | myperc$VR == 18 | myperc$VR >= 27) & myperc$cluster != -1,],aes(af(cluster),perc)) +
+ggplot(my.perc[(my.perc$VR < 15 | my.perc$VR == 18 | my.perc$VR >= 27) & my.perc$cluster != -1,],aes(af(cluster),perc)) +
   geom_bar(aes(fill=af(GCperc)),stat='identity',position='dodge',color='black') +
   theme_bw() + xlab('Cluster') + ylab('Percent (%)') +
   coord_cartesian(ylim=c(0,100)) +
   facet_grid(af(GCskew)~.) +
   theme(legend.position = 'bottom') + scale_fill_brewer(palette = 'Set3')                                    
 
-ggplot(myperc[(myperc$VR >= 15 & myperc$VR <= 26) & myperc$cluster != -1,],aes(af(cluster),perc)) +
+ggplot(my.perc[(my.perc$VR >= 15 & my.perc$VR <= 26) & my.perc$cluster != -1,],aes(af(cluster),perc)) +
   geom_bar(aes(fill=af(Gclust)),stat='identity',position='dodge',color='black') +
   theme_bw() + xlab('Cluster') + ylab('Percent (%)') +
   coord_cartesian(ylim=c(0,100)) +
@@ -727,50 +738,50 @@ ggplot(myperc[(myperc$VR >= 15 & myperc$VR <= 26) & myperc$cluster != -1,],aes(a
 dev.off()
 
 pdf("cluster_By_GCperc_GCskew_Gclustering.pdf",width=5,height=5)
-ggplot(myperc[myperc$VR >= 1 & myperc$VR <= 4 & myperc$cluster != -1,],aes(af(cluster),perc)) +
+ggplot(my.perc[my.perc$VR >= 1 & my.perc$VR <= 4 & my.perc$cluster != -1,],aes(af(cluster),perc)) +
   geom_bar(aes(fill=af(VR)),stat='identity',position='dodge',color='black') +
   theme_bw() + xlab('Cluster') + ylab('Percent (%)') +
   coord_cartesian(ylim=c(0,100)) + ggtitle('% Rloop Peak Distribution\nat VR #1 to 4') +
   theme(legend.position = 'right') + scale_fill_brewer(palette = 'Set3')                                    
-ggplot(myperc[(myperc$VR == 2|myperc$VR == 6|myperc$VR == 10|myperc$VR == 14) & myperc$cluster != -1,],aes(af(cluster),perc)) +
+ggplot(my.perc[(my.perc$VR == 2|my.perc$VR == 6|my.perc$VR == 10|my.perc$VR == 14) & my.perc$cluster != -1,],aes(af(cluster),perc)) +
   geom_bar(aes(fill=af(VR)),stat='identity',position='dodge',color='black') +
   theme_bw() + xlab('Cluster') + ylab('Percent (%)') +
   coord_cartesian(ylim=c(0,100)) + ggtitle('% Rloop Peak Distribution\nat VR #2, 6, 10, 14') +
   theme(legend.position = 'right') + scale_fill_brewer(palette = 'Set3')                                    
-ggplot(myperc[(myperc$VR >= 15 & myperc$VR <= 18) & myperc$cluster != -1,],aes(af(cluster),perc)) +
+ggplot(my.perc[(my.perc$VR >= 15 & my.perc$VR <= 18) & my.perc$cluster != -1,],aes(af(cluster),perc)) +
   geom_bar(aes(fill=af(VR)),stat='identity',position='dodge',color='black') +
   theme_bw() + xlab('Cluster') + ylab('Percent (%)') +
   coord_cartesian(ylim=c(0,100)) + ggtitle('% Rloop Peak Distribution\nat VR #15-21') +
   theme(legend.position = 'right') + scale_fill_brewer(palette = 'Set3')                                    
 dev.off()
 
-myperc3 = myperc[(myperc$cluster >= 1 & myperc$cluster <= 3) | myperc$cluster == 6,]
-myperc2 = aggregate(myperc3$count,by=list(myperc3$VR),sum)
-colnames(myperc2) = c('VR','total.in.VR')
-myperc3 = merge(myperc3,myperc2,by=c('VR'),all=T)
-myperc3$perc.in.VR = ai(myperc3$count / myperc3$total.in.VR * 1000 + 0.5)/10
+my.perc3 = my.perc[(my.perc$cluster >= 1 & my.perc$cluster <= 3) | my.perc$cluster == 6,]
+my.perc2 = aggregate(my.perc3$count,by=list(my.perc3$VR),sum)
+colnames(my.perc2) = c('VR','total.in.VR')
+my.perc3 = merge(my.perc3,my.perc2,by=c('VR'),all=T)
+my.perc3$perc.in.VR = ai(my.perc3$count / my.perc3$total.in.VR * 1000 + 0.5)/10
 
 
 
-myperc4 = myperc[(myperc$cluster < 1 | myperc$cluster > 3) & myperc$cluster != 6,]
-myperc2 = aggregate(myperc4$count,by=list(myperc4$VR),sum)
-colnames(myperc2) = c('VR','total.out.VR')
-myperc4 = merge(myperc4,myperc2,by=c('VR'),all=T)
-myperc4$perc.out.VR = ai(myperc4$count / myperc4$total.out.VR * 1000 + 0.5)/10
-#myperc3[is.na(myperc3$total.out.VR),]$total.out.VR = 0
+my.perc4 = my.perc[(my.perc$cluster < 1 | my.perc$cluster > 3) & my.perc$cluster != 6,]
+my.perc2 = aggregate(my.perc4$count,by=list(my.perc4$VR),sum)
+colnames(my.perc2) = c('VR','total.out.VR')
+my.perc4 = merge(my.perc4,my.perc2,by=c('VR'),all=T)
+my.perc4$perc.out.VR = ai(my.perc4$count / my.perc4$total.out.VR * 1000 + 0.5)/10
+#my.perc3[is.na(my.perc3$total.out.VR),]$total.out.VR = 0
 
 
 
 pdf("cluster1to4.pdf",width=5,height=5)
 
-p1a = ggplot(myperc3[(myperc3$VR < 15 | myperc3$VR == 18  | myperc3$VR >= 27) & myperc3$VR != 31, ],aes(af(cluster),perc)) +
+p1a = ggplot(my.perc3[(my.perc3$VR < 15 | my.perc3$VR == 18  | my.perc3$VR >= 27) & my.perc3$VR != 31, ],aes(af(cluster),perc)) +
   geom_bar(aes(fill=af(GCperc)),stat='identity',position='dodge',color='black') +
   geom_text(aes(label=VR,y=0,group=GCperc),stat='identity',position=position_dodge(width=0.9),size=3,vjust=1) +
   theme_bw() + xlab('Cluster') + ylab('Percent (%)') +
   coord_cartesian(ylim=c(0,100)) +
   facet_grid(.~af(GCskew)) +
   theme(legend.position = 'bottom') + scale_fill_brewer(palette = 'Set3')                                    
-p1b = ggplot(myperc3[(myperc3$VR < 15 | myperc3$VR == 18  | myperc3$VR >= 27) & myperc3$VR != 31,],aes(af(cluster),perc.in.VR)) +
+p1b = ggplot(my.perc3[(my.perc3$VR < 15 | my.perc3$VR == 18  | my.perc3$VR >= 27) & my.perc3$VR != 31,],aes(af(cluster),perc.in.VR)) +
   geom_bar(aes(fill=af(GCperc)),stat='identity',position='dodge',color='black') +
   geom_text(aes(label=VR,y=0,group=GCperc),stat='identity',position=position_dodge(width=0.9),size=3,vjust=1) +
   theme_bw() + ylab('Percent (%)') +
@@ -778,14 +789,14 @@ p1b = ggplot(myperc3[(myperc3$VR < 15 | myperc3$VR == 18  | myperc3$VR >= 27) & 
   facet_grid(.~af(GCskew)) +
   theme(legend.position = 'bottom') + scale_fill_brewer(palette = 'Set3')                                    
 
-p1a = ggplot(myperc3[(myperc3$VR < 15 | myperc3$VR == 18  | myperc3$VR >= 27) & myperc3$VR != 31,],aes(af(GCperc),perc)) +
+p1a = ggplot(my.perc3[(my.perc3$VR < 15 | my.perc3$VR == 18  | my.perc3$VR >= 27) & my.perc3$VR != 31,],aes(af(GCperc),perc)) +
   geom_bar(aes(fill=af(cluster)),stat='identity',position='dodge',color='black') +
   geom_text(aes(label=VR,y=0,group=GCperc),stat='identity',position=position_dodge(width=0.9),size=3,vjust=1) +
   theme_bw() + ylab('Percent (%)') +
   coord_cartesian(ylim=c(0,100)) +
   facet_grid(.~af(GCskew)) +
   theme(legend.position = 'right') + scale_fill_brewer(palette = 'Set3')                                    
-p1b = ggplot(myperc3[(myperc3$VR < 15 | myperc3$VR == 18  | myperc3$VR >= 27) & myperc3$VR != 31,],aes(af(GCperc),perc.in.VR)) +
+p1b = ggplot(my.perc3[(my.perc3$VR < 15 | my.perc3$VR == 18  | my.perc3$VR >= 27) & my.perc3$VR != 31,],aes(af(GCperc),perc.in.VR)) +
   geom_bar(aes(fill=af(cluster)),stat='identity',position='dodge',color='black') +
   geom_text(aes(label=VR,y=0,group=GCperc),stat='identity',position=position_dodge(width=0.9),size=3,vjust=1) +
   theme_bw() +  ylab('Percent (%)') +
@@ -794,7 +805,7 @@ p1b = ggplot(myperc3[(myperc3$VR < 15 | myperc3$VR == 18  | myperc3$VR >= 27) & 
   theme(legend.position = 'right') + scale_fill_brewer(palette = 'Set3')       
 
 
-p1a = ggplot(myperc3[(myperc3$VR < 15 | myperc3$VR == 18  | myperc3$VR >= 27) & myperc3$VR != 31,],aes(group=af(GCperc),x=GCperc,y=perc)) +
+p1a = ggplot(my.perc3[(my.perc3$VR < 15 | my.perc3$VR == 18  | my.perc3$VR >= 27) & my.perc3$VR != 31,],aes(group=af(GCperc),x=GCperc,y=perc)) +
   geom_boxplot(aes(fill=af(GCperc)),outlier.shape = NA) +
   facet_grid(.~af(cluster)) +
   stat_summary(geom='point',fun=mean,aes(x=GCperc,color=af(GCperc))) +
@@ -808,7 +819,7 @@ p1a = ggplot(myperc3[(myperc3$VR < 15 | myperc3$VR == 18  | myperc3$VR >= 27) & 
   scale_color_brewer(palette = 'Set2') +
   scale_fill_brewer(palette = 'Set2')                                    
 
-p1b = ggplot(myperc3[(myperc3$VR < 15 | myperc3$VR == 18  | myperc3$VR >= 27) & myperc3$VR != 31,],aes(group=af(GCperc),x=GCperc,y=perc.in.VR)) +
+p1b = ggplot(my.perc3[(my.perc3$VR < 15 | my.perc3$VR == 18  | my.perc3$VR >= 27) & my.perc3$VR != 31,],aes(group=af(GCperc),x=GCperc,y=perc.in.VR)) +
   geom_boxplot(aes(fill=af(GCperc)),outlier.shape = NA) +
   facet_grid(.~af(cluster)) +
   stat_summary(geom='point',fun=mean,aes(x=GCperc,color=af(GCperc))) +
@@ -822,7 +833,7 @@ p1b = ggplot(myperc3[(myperc3$VR < 15 | myperc3$VR == 18  | myperc3$VR >= 27) & 
   scale_color_brewer(palette = 'Set2') +
   scale_fill_brewer(palette = 'Set2')  
 
-p1c = ggplot(myperc4[(myperc4$VR < 15 | myperc4$VR == 18  | myperc4$VR >= 27) & myperc4$VR != 31,],aes(group=af(GCperc),x=GCperc,y=perc)) +
+p1c = ggplot(my.perc4[(my.perc4$VR < 15 | my.perc4$VR == 18  | my.perc4$VR >= 27) & my.perc4$VR != 31,],aes(group=af(GCperc),x=GCperc,y=perc)) +
   geom_boxplot(aes(fill=af(GCperc)),outlier.shape = NA) +
   facet_grid(.~af(cluster)) +
   stat_summary(geom='point',fun=mean,aes(x=GCperc,color=af(GCperc))) +
@@ -836,7 +847,7 @@ p1c = ggplot(myperc4[(myperc4$VR < 15 | myperc4$VR == 18  | myperc4$VR >= 27) & 
   scale_color_brewer(palette = 'Set2') +
   scale_fill_brewer(palette = 'Set2')  
 
-p1d = ggplot(myperc4[(myperc4$VR < 15 | myperc4$VR == 18  | myperc4$VR >= 27) & myperc4$VR != 31,],aes(group=af(GCperc),x=GCperc,y=perc.out.VR)) +
+p1d = ggplot(my.perc4[(my.perc4$VR < 15 | my.perc4$VR == 18  | my.perc4$VR >= 27) & my.perc4$VR != 31,],aes(group=af(GCperc),x=GCperc,y=perc.out.VR)) +
   geom_boxplot(aes(fill=af(GCperc)),outlier.shape = NA) +
   facet_grid(.~af(cluster)) +
   stat_summary(geom='point',fun=mean,aes(x=GCperc,color=af(GCperc))) +
@@ -867,7 +878,7 @@ Bprint('DONE')
 
 # + theme(axis.text.x=element_blank(),axis.ticks.x = element_blank())
 # 
-# test1 = mydftemp.meanbeg[mydftemp.meanbeg$meanbeg.unif.sig.coords == 1 & mydftemp.meanbeg$meanbeg.norm.sig.coords == 1 & mydftemp.meanbeg$cluster == 4,]
+# test1 = my.dftemp.meanbeg[my.dftemp.meanbeg$meanbeg.unif.sig.coords == 1 & my.dftemp.meanbeg$meanbeg.norm.sig.coords == 1 & my.dftemp.meanbeg$cluster == 4,]
 # plot(test1$y.meanbeg,type='l')
 # test1 = test1[test1$y.meanbeg >= 625 & test1$y.meanbeg < 660,]
 # # test1 = test1[order(test1$meanbeg),]; test1$y = seq(1,size(test1))
@@ -876,15 +887,15 @@ Bprint('DONE')
 # shapiro.test(test1$meanbeg)$p.value
 # plot(y=test1$y.meanbeg,x=test1$meanbeg,type='l')
 # lines(x=seq(min(test1$meanbeg),max(test1$meanbeg),length.out=size(test1)),y=seq(min(test1$y),max(test1$y),length.out=size(test1)),col='red4')
-# boxplot(mydftemp.meanbeg[mydftemp.meanbeg$meanbeg.unif.sig.coords == 1 & mydftemp.meanbeg$meanbeg.norm.sig.coords == 1 & mydftemp.meanbeg$cluster == 2,]$meanbeg.unif.pval,mydftemp.meanbeg[mydftemp.meanbeg$meanbeg.unif.sig.coords == 1 & mydftemp.meanbeg$meanbeg.norm.sig.coords == 1 & mydftemp.meanbeg$cluster == 2,]$meanbeg.norm.pval)
+# boxplot(my.dftemp.meanbeg[my.dftemp.meanbeg$meanbeg.unif.sig.coords == 1 & my.dftemp.meanbeg$meanbeg.norm.sig.coords == 1 & my.dftemp.meanbeg$cluster == 2,]$meanbeg.unif.pval,my.dftemp.meanbeg[my.dftemp.meanbeg$meanbeg.unif.sig.coords == 1 & my.dftemp.meanbeg$meanbeg.norm.sig.coords == 1 & my.dftemp.meanbeg$cluster == 2,]$meanbeg.norm.pval)
 # 
-# p4 = ggplot(mydftemp.meanbeg,aes(x=mydftemp.meanbeg$y.meanbeg,y=1)) +
-# #  geom_line(aes(y=mydftemp.meanbeg$meanbeg.unif.pval),color='red4') +
-#   stat_smooth(aes(y=mydftemp.meanbeg$meanbeg.unif.pval),color='red4') +
-#   stat_smooth(aes(y=mydftemp.meanbeg$meanbeg.hots.pval),color='green4') +
-#   stat_smooth(aes(y=mydftemp.meanbeg$meanbeg.unif.pval),color='red4') +
-#   #  geom_line(aes(y=mydftemp.meanbeg$meanbeg.norm.pval),color='blue4') +
-#   stat_smooth(aes(y=mydftemp.meanbeg$meanbeg.norm.pval),color='blue4') +
+# p4 = ggplot(my.dftemp.meanbeg,aes(x=my.dftemp.meanbeg$y.meanbeg,y=1)) +
+# #  geom_line(aes(y=my.dftemp.meanbeg$meanbeg.unif.pval),color='red4') +
+#   stat_smooth(aes(y=my.dftemp.meanbeg$meanbeg.unif.pval),color='red4') +
+#   stat_smooth(aes(y=my.dftemp.meanbeg$meanbeg.hots.pval),color='green4') +
+#   stat_smooth(aes(y=my.dftemp.meanbeg$meanbeg.unif.pval),color='red4') +
+#   #  geom_line(aes(y=my.dftemp.meanbeg$meanbeg.norm.pval),color='blue4') +
+#   stat_smooth(aes(y=my.dftemp.meanbeg$meanbeg.norm.pval),color='blue4') +
 #   facet_grid(cluster~.)
 # p4
 
