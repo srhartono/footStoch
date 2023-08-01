@@ -84,20 +84,26 @@ for (my.VR in seq(1,31)) {
   my.fa.orig$amp.beg = my.bed.orig[my.bed.orig$feature == "FW_Primer",]$beg-10
   my.fa.orig$amp.end = my.bed.orig[my.bed.orig$feature == "RV_Primer",]$end+10
   my.fa.orig$amp.seq = my.fa.orig$seq
+  my.CpGprof.orig = fa.get_CpGprof(my.fa,gp,unit.test=FALSE,with.chunk=FALSE)
+  my.CpGprof.orig$pos = my.CpGprof.orig$index
+  #test1 = fa.get_CpGprof(my.fa=my.fa,gp=gp)
   
   #my.fa.orig.c = fa.get_CytosinePosition(my.fa.orig)
 
   if (gp$C.transform == TRUE) {
     my.fa       = my.fa.orig
-    df          = transform_index_into_Cindex(df.orig     , my.fa, c('beg','end'),verbose=T) # df transform into df.c
-    dfclust     = transform_index_into_Cindex(dfclust.orig, my.fa, c('x0end','y0end','x0beg','y0beg','x1end','y1end','x1beg','y1beg'),verbose=T)
-    my.bed      = transform_index_into_Cindex(my.bed.orig , my.fa, c('beg','end'),verbose=T) 
+    df          = fa.transform_PositionIntoCytosinePosition(df.orig        , my.fa, c('beg','end'),verbose=T) # df transform into df.c
+    dfclust     = fa.transform_PositionIntoCytosinePosition(dfclust.orig   , my.fa, c('x0end','y0end','x0beg','y0beg','x1end','y1end','x1beg','y1beg'),verbose=T)
+    my.bed      = fa.transform_PositionIntoCytosinePosition(my.bed.orig    , my.fa, c('beg','end'),verbose=T) 
+    my.CpGprof  = fa.transform_PositionIntoCytosinePosition(my.CpGprof.orig, my.fa, c('pos'),verbose=T)
+    my.CpGprof = my.CpGprof[my.CpGprof$nuc == 'C',]
     gp$maxX     = 1000
   } else {
     my.fa       = my.fa.orig
     df          = df.orig
     dfclust     = dfclust.orig
     my.bed      = my.bed.orig
+    my.CpGprof  = my.CpGprof.orig
     gp$maxX     = gp.lib$maxX
   }
   
@@ -106,6 +112,8 @@ for (my.VR in seq(1,31)) {
   
   df$index = seq(1,dim(df)[1])
   df$cluster = 0
+  df = get_cluster(df = df, dfclust = dfclust)
+  df = get_y(df[order(df$cluster,df$beg,df$end),])
   df$y = seq(1,dim(df)[1])
   
 
@@ -120,24 +128,25 @@ for (my.VR in seq(1,31)) {
   df$begI = df$beg #ai(df$beg / gp$divby)
   df$endI = df$end #ai(df$end / gp$divby)
   df$begcluster = 0
-  df$endcluster =0 
+  df$endcluster = 0 
   
+  
+  p0 = ps.CpGprof(df = my.CpGprof,by='pos',gp = gp,my.bed = my.bed)
   
   df = df[order(df$beg, df$end),]; df$y = seq(1,dim(df)[1])
-  p1.beg.orig = ps(df,'beg',gp=gp,print=F,group='cluster',my.bed=my.bed,my.title=paste(gp$my.title.wrap,'Sorted by R-loop Beg'))
+  p1.beg.orig = ps(df,'beg',gp=gp,print=F,my.bed=my.bed,my.title=paste(gp$my.title.wrap,'Sorted by R-loop Beg'))
   
   df = df[order(df$end, df$beg),]; df$y = seq(1,dim(df)[1])
-  p1.end.orig = ps(df,'end',gp=gp,print=F,group='cluster',my.bed=my.bed,my.title=paste(gp$my.title.wrap,'Sorted by R-loop End'))
+  p1.end.orig = ps(df,'end',gp=gp,print=F,my.bed=my.bed,my.title=paste(gp$my.title.wrap,'Sorted by R-loop End'))
 
-  df = get_cluster(df = df, dfclust = dfclust)
   
   df = df[order(df$cluster,df$beg, df$end),]; df$y = seq(1,dim(df)[1])
-  p1.beg.clust = ps(df,'beg',gp=gp,print=F,group='cluster',my.bed=my.bed,my.title=paste(gp$my.title.wrap,'Clustered & Sorted by R-loop End'))
+  p1.beg.clust = ps(df,'beg',gp=gp,print=F,my.group='cluster',my.bed=my.bed,my.title=paste(gp$my.title.wrap,'Clustered & Sorted by R-loop End'))
   
   df = df[order(df$cluster,df$end, df$beg),]; df$y = seq(1,dim(df)[1])
-  p1.end.clust = ps(df,'end',gp=gp,print=F,group='cluster',my.bed=my.bed,my.title=paste(gp$my.title.wrap,'Clustered & Sorted by R-loop End'))
+  p1.end.clust = ps(df,'end',gp=gp,print=F,my.group='cluster',my.bed=my.bed,my.title=paste(gp$my.title.wrap,'Clustered & Sorted by R-loop End'))
   
-  p1 = grid.arrange(p1.beg.orig,p1.end.orig,p1.beg.clust,p1.end.clust)
+  p1 = grid.arrange(p0,p0,p1.beg.orig,p1.end.orig,p1.beg.clust,p1.end.clust,nrow=3)
 
   
   doclust = function(df) {
@@ -226,8 +235,8 @@ for (my.VR in seq(1,31)) {
   sanity_check(size(dfm) > 0,size(dfm),verbose = T)
   sanity_check(size(unique(dfmclust$cluster)) > 0,size(dfk),verbose = T)
   
-  ptest1 = ggplot.xy(df,dfclust,gp,print=F)
-  ptest2 = ggplot.xy(dfm,dfmclust,gp,print=F)
+  ptest1 = ps.ggplot.xy(df,dfclust,gp,print=F)
+  ptest2 = ps.ggplot.xy(dfm,dfmclust,gp,print=F)
   grid.arrange(ptest1,ptest2,nrow=1,ncol=2)
   #pdf cluster
   dfp = df
@@ -247,9 +256,9 @@ for (my.VR in seq(1,31)) {
   dfkclust = kres$allcluster
   sanity_check(size(dfk) > 0,size(dfk),verbose = T)
   
-  dfmlist2 = get_colorgroup(dfm,dfmclust,gp)
-  dfklist2 = get_colorgroup(dfk,dfkclust,gp)
-  dfplist2 = get_colorgroup(dfp,dfpclust,gp)
+  dfmlist2 = ps.get_color.group(dfm,dfmclust,gp)
+  dfklist2 = ps.get_color.group(dfk,dfkclust,gp)
+  dfplist2 = ps.get_color.group(dfp,dfpclust,gp)
   
   graph.clust(dfmlist2$df,dfmlist2$dfclust,paste('results/clustby/',gp$my.title,'_mythres.pdf' ,sep=''),gp,'colorgroup',my.bed = my.bed)
   graph.clust(dfklist2$df,dfklist2$dfclust,paste('results/clustby/',gp$my.title,'_kmeans5.pdf' ,sep=''),gp,'colorgroup',my.bed = my.bed)
@@ -466,10 +475,10 @@ for (my.VR in seq(1,31)) {
   # #p1.beg.c = ps(df,'begC',gp=gp,print=F,group='cluster')
   
   df = df[order(df$cluster,df$beg, df$end),]; df$y = seq(1,dim(df)[1])
-  p1.beg.c = ps(df,'beg',gp=gp,print=F,group='cluster')
+  p1.beg.c = ps(df,'beg',gp=gp,print=F)
   
   df = df[order(df$cluster,df$end, df$beg),]; df$y = seq(1,dim(df)[1])
-  p1.end.c = ps(df,'end',gp=gp,print=F,group='cluster')
+  p1.end.c = ps(df,'end',gp=gp,print=F)
   
   
   df = df[order(df$cluster,df$meanbeg, df$meanend),]; df$y = seq(1,dim(df)[1])
@@ -483,7 +492,7 @@ for (my.VR in seq(1,31)) {
   ## plot xy
   #dfclust = data.frame()
   #df$cluster = 1
-  #p.xy = ggplot.xy(df,dfclust)
+  #p.xy = ps.ggplot.xy(df,dfclust)
   #plot(df$beg,df$end,pch='.')
   # Do tests
   
@@ -498,7 +507,7 @@ for (my.VR in seq(1,31)) {
   my.df = annot.pvar(my.df,my.sc)
   head(my.df)
   head(my.sc)
-  #ggplot.xy(df = my.df,dfclust = dfclust)
+  #ps.ggplot.xy(df = my.df,dfclust = dfclust)
   
   
   posType1 = 'meanbeg'

@@ -1,7 +1,9 @@
+library(stringr)
 library(rlang)
 e = exists
 cn = colnames
 rn = rownames
+aa = as.array
 af = as.factor
 ac = as.character
 an = as.numeric
@@ -226,7 +228,161 @@ get_closest = function(d1,d2) {
   return(test3$b[1])
 }
 
-transform_index_into_Cindex = function(my_df,my_fa,my_bys,verbose=F) {
+fa.get_CpGprof = function(my.fa,gp,my.window=NA,my.step=NA,unit.test=FALSE,with.chunk=FALSE) {
+  if (is.na(my.window)) {
+    if ('CpGprof.window' %in% gp) {
+      my.window = gp$GCprof.window
+    } else {
+      my.window = 200
+    }
+  }
+  if (is.na(my.step)) {
+    if ('CpGprof.step' %in% gp) {
+      my.step = gp$GCprof.step
+    } else {
+      my.step = 1
+    }
+  }
+
+  nuc = aa(ac(strsplit(
+    x = ac(my.fa$seq[[1]]),
+    split = '',
+    perl = T
+  )[[1]]))
+  df = data.frame(nuc=nuc,index = my.fa$amp.beg + seq(1,nchar(my.fa$seq)))
+  df$chunk = apply(data.frame(test1$index-my.window/2),1,fa.get_chunk,my.seq=my.fa$seq,gp=gp)
+  dfchunk = as.data.frame(t(as.matrix(apply(data.frame(df$chunk),1,fa.calculate_CpGprof),nrow=size(df$chunk),byrow = T)))
+  colnames(dfchunk) = c('CGdens','GCcont','GCskew')
+  df = cbind(df,dfchunk)
+  
+  #unit test
+  if (unit.test == TRUE) {
+    ps.CpGprof(df,gp=gp,my.bed=my.bed.orig,my.title=gp$my.title.wrap)
+  }
+  #df[df$nuc == 'C',]$isC = 
+#  df$chunk = apply(df$index,1,fa.get_chunk(),my.seq=my.fa$seq,gp=gp,my.window=my.window,my.step=my.step)
+  if (with.chunk == FALSE) {return(subset(df,select=c(-chunk)))}
+  return(df)
+}
+
+ # test1 = fa.get_NucleotidePosition(my.fa=my.fa,gp=gp)
+# test1$chunk.000 = apply(data.frame(test1$index-000),1,fa.get_chunk,my.seq=my.fa$seq,gp=gp)
+# #test1$chunk.050 = apply(data.frame(test1$index-050),1,fa.get_chunk,my.seq=my.fa$seq,gp=gp)
+# test1$chunk.100 = apply(data.frame(test1$index-100),1,fa.get_chunk,my.seq=my.fa$seq,gp=gp)
+# #test1$chunk.150 = apply(data.frame(test1$index-150),1,fa.get_chunk,my.seq=my.fa$seq,gp=gp)
+# test1$chunk.200 = apply(data.frame(test1$index-200),1,fa.get_chunk,my.seq=my.fa$seq,gp=gp)
+# 
+# test3 = apply(data.frame(test1$chunk.000),1,fa.calculate_CpGprof)
+# test2.000 = as.data.frame(t(as.matrix(apply(data.frame(test1$chunk.000),1,fa.calculate_CpGprof),nrow=size(test1$chunk000),byrow = T)))
+# colnames(test2.000) = c('CGdens000','GCcont000','GCskew000')
+# test1 = cbind(test1,test2.000)
+# 
+# test2.100 = as.data.frame(t(as.matrix(apply(data.frame(test1$chunk.100),1,fa.calculate_CpGprof),nrow=size(test1$chunk100),byrow = T)))
+# colnames(test2.100) = c('CGdens100','GCcont100','GCskew100')
+# test1 = cbind(test1,test2.100)
+# 
+# test2.200 = as.data.frame(t(as.matrix(apply(data.frame(test1$chunk.200),1,fa.calculate_CpGprof),nrow=size(test1$chunk200),byrow = T)))
+# colnames(test2.200) = c('CGdens200','GCcont200','GCskew200')
+# test1 = cbind(test1,test2.200)
+# 
+
+# plot(NA,xlim=c(0,2500),ylim=c(0,1.4))
+# lines(test1$index,test1$CGdens000,col='blue2')
+# lines(test1$index,test1$CGdens100,col='blue3')
+# lines(test1$index,test1$CGdens200,col='blue4')
+# lines(test1$index,test1$GCcont000,col='green2')
+# lines(test1$index,test1$GCcont100,col='green3')
+# lines(test1$index,test1$GCcont200,col='green4')
+# lines(test1$index,test1$GCskew000+0.5,col='red2')
+# lines(test1$index,test1$GCskew100+0.5,col='red3')
+# lines(test1$index,test1$GCskew200+0.5,col='red4')
+# segments(0,0.5,2500,0.5,lty=2)
+
+fa.calculate_CpGprof = function(my.seq) {
+    N    = nchar(my.seq)
+    nA   = str_count(my.seq,"A")
+    nC   = str_count(my.seq,"C")
+    nG   = str_count(my.seq,"G")
+    nT   = str_count(my.seq,"T")
+    nN   = str_count(my.seq,"N")
+    nCpG = str_count(my.seq,"CG")
+    CGdens = fa.calc_dens(N,nC,nG,nCpG)
+    GCcont = fa.calc_cont(N,nG,nC)
+    GCskew = fa.calc_skew(N,nG,nC)
+    return(c(CGdens,GCcont,GCskew))
+}
+
+fa.calc_dens = function(N,n1,n2,n3) {
+  if (N == 0) {return(0)}
+  if (n1/N*n2/N == 0) {return(0)}
+  return(ai(0.5+((n3*N)/(n1*n2)*1000))/1000)
+}
+fa.calc_cont = function(N,n1,n2) {
+  if (n1+n2 == 0) {return(0)}
+  return(ai(0.5+(n1+n2)/N*1000)/1000)
+}
+fa.calc_skew = function(N,n1,n2) {
+  if (n1+n2 == 0) {return(0)}
+  if (n1-n2 > 0) {my.sign = 1} else {my.sign = -1}
+  return(ai((my.sign * 0.5) + (n1-n2)/(n1+n2)*1000)/1000)
+}
+fa.get_chunk = function(my.position,my.seq,gp,my.window=NA,my.step=NA) {
+  if (is.na(my.window)) {
+    if ('CpGprof.window' %in% gp) {
+      my.window = gp$GCprof.window
+    } else {
+      my.window = 200
+    }
+  }
+  if (is.na(my.step)) {
+    if ('CpGprof.step' %in% gp) {
+      my.step = gp$GCprof.step
+    } else {
+      my.step = 1
+    }
+  }
+  
+  if (my.window > nchar(my.seq)) {my.window = nchar(my.seq)}
+  
+  iMin = max(1,min(my.position,nchar(my.seq)-1))
+  iMax = max(1,min(my.position+my.window,nchar(my.seq)))
+  chunk = substr(my.seq,iMin,iMax)
+  return(chunk)
+}
+
+
+fa.get_CytosinePosition = function(my.fa) {
+  nuc = as.array(as.character(strsplit(
+    x = as.character(my.fa$amp.seq[[1]]),
+    split = '',
+    perl = T
+  )
+  [[1]]))
+  df = data.frame(nuc=nuc,isC = rep(0,length(nuc)))
+  df[df$nuc == 'C',]$isC = 1
+  df$index = my.fa$amp.beg + seq(1,dim(df)[1])-1
+  head(df)
+  #   nuc isC
+  # 1   G   0
+  # 2   G   0
+  # 3   G   0
+  # 4   G   0
+  # 5   T   0
+  # 6   C   0
+  
+  
+  if (defined(df[df$isC == 1,])) {
+    df = df[df$isC == 1,]
+    df$Cindex = my.fa$amp.beg + seq(1,dim(df)[1])-1
+    df$diff = c(diff(df$index),0)
+    to_return = df
+  } else {
+    to_return = data.frame()
+  }
+  return(to_return)
+}
+
+fa.transform_PositionIntoCytosinePosition = function(my_df,my_fa,my_bys,verbose=F) {
   my_fa_c       = fa.get_CytosinePosition(my_fa)
   my.verbose=verbose
   my_df_orig = my_df
@@ -251,3 +407,63 @@ transform_index_into_Cindex = function(my_df,my_fa,my_bys,verbose=F) {
   return(to_return)
 }
 
+fa.calculate_GCprof = function(my_fa,gp,my.window=NA,my.step=NA) {
+  if (is.na(my.window)) {
+    if ('CpGprof.window' %in% gp) {
+      my.window = gp$GCprof.window
+    } else {
+      my.window = 200
+    }
+  }
+  if (is.na(my.step)) {
+    if ('CpGprof.step' %in% gp) {
+      my.step = gp$GCprof.step
+    } else {
+      my.step = 1
+    }
+  }
+  my.step   = gp$GCprof.step
+  my.seq = my.fa$seq[1]
+  iMin = 1
+  iMax = max(my.window,nchar(my.seq)-my.window)
+  if (my.window > nchar(myseq)) {
+    my.window = nchar(myseq)
+  }
+  df = data.frame()
+  for (i in seq(iMin,iMax,my.step)) {
+    chunk = substr(my.seq,i,my.window)
+    nA = str_count(chunk,'A')
+    nC = str_count(chunk,'C')
+    nG = str_count(chunk,'G')
+    nT = str_count(chunk,'T')
+    nN = str_count(chunk,'N')
+    N  = nA + nC + nG + nT + nN
+    # GC Skew
+    GCskew = 0
+    if (nG + nC > 0) {GCskew = ai((nG - nC)/(nG + nC) * 100) / 100}
+    GCcont = 0
+    if (N > 0) {GCcont = ai(GC = (nG + nC) / (N) * 100 + 0.5)/100}
+  }
+}
+
+fa.calculate_chunk = function(my.seq,nuc1,nuc2,type) {
+  if (type == 'skew') {
+    n1 = str_count(my.seq,nuc1)
+    n1 = str_count(my.seq,nuc1)
+  }
+}
+
+
+sanity_check = function(arg,my.message='',verbose=F) {
+  if (arg == FALSE) {
+    message(my.message,'=',arg)
+    return(invisible(FALSE))
+  } else {
+    if (verbose == T) {
+      cat(my.message,'=',arg,'\n')
+    }
+    return(invisible(TRUE))
+  }
+}
+
+test1=fa.get_NucleotidePosition(my.fa)
