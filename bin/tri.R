@@ -29,11 +29,13 @@ gp = gp.check_gp(gp1=list(
 ),gp2=gp.lib,verbose=F,debug=F)
 
 names(gp)
+gp$GCprof.window = 50
 
-gp$C.transform = TRUE
+#gp$C.transform = TRUE
 gp$use_clusterFile= 'resources/dfclustVR20.RDS'
 my.VR = 20
-
+dfd.beg3 = data.frame()
+dfd.end3 = data.frame()
 for (my.VR in seq(1,31)) {
   print(my.VR)
   my.params = list(
@@ -84,7 +86,9 @@ for (my.VR in seq(1,31)) {
   my.fa.orig$amp.beg = my.bed.orig[my.bed.orig$feature == "FW_Primer",]$beg-10
   my.fa.orig$amp.end = my.bed.orig[my.bed.orig$feature == "RV_Primer",]$end+10
   my.fa.orig$amp.seq = my.fa.orig$seq
-  my.CpGprof.orig = fa.get_CpGprof(my.fa,gp,unit.test=FALSE,with.chunk=FALSE)
+  my.CpGprof.orig.list = fa.get_CpGprof(my.fa.orig,gp,unit.test=FALSE,with.chunk=FALSE)
+  my.CpGprof.orig = my.CpGprof.orig.list$df
+  my.CpGprof.name = my.CpGprof.orig.list$names
   my.CpGprof.orig$pos = my.CpGprof.orig$index
   #test1 = fa.get_CpGprof(my.fa=my.fa,gp=gp)
   
@@ -96,7 +100,7 @@ for (my.VR in seq(1,31)) {
     dfclust     = fa.transform_PositionIntoCytosinePosition(dfclust.orig   , my.fa, c('x0end','y0end','x0beg','y0beg','x1end','y1end','x1beg','y1beg'),verbose=T)
     my.bed      = fa.transform_PositionIntoCytosinePosition(my.bed.orig    , my.fa, c('beg','end'),verbose=T) 
     my.CpGprof  = fa.transform_PositionIntoCytosinePosition(my.CpGprof.orig, my.fa, c('pos'),verbose=T)
-    my.CpGprof = my.CpGprof[my.CpGprof$nuc == 'C',]
+    my.CpGprof  = my.CpGprof[my.CpGprof$nuc == 'C',]
     gp$maxX     = 1000
   } else {
     my.fa       = my.fa.orig
@@ -130,23 +134,96 @@ for (my.VR in seq(1,31)) {
   df$begcluster = 0
   df$endcluster = 0 
   
+  res = tryCatch({
+    bytemp = 'beg'
+    dfd.beg = df.get_density(df,by=bytemp,gp,my.CpGprof)
+    dfd.beg2 = merge(df,subset(dfd.beg,select=c(-index,-nuc)),by=c(bytemp))
+    dfd.beg2 = get_cor(df,dfd.beg2,bytemp,my.params,gp=gp)
+    dfd.beg3 = rbind(dfd.beg3,dfd.beg2)
+    bytemp = 'end'
+    df = df[order(df[,bytemp]),]
+    dfd.end = df.get_density(df,by=bytemp,gp,my.CpGprof)
+    dfd.end2 = merge(df,subset(dfd.end,select=c(-index,-nuc)),by=c(bytemp))
+    dfd.end2 = get_cor(df,dfd.end2,bytemp,my.params,gp=gp)
+    dfd.end3 = rbind(dfd.end3,dfd.end2)
+  },
+  error = function(cond) {
+    return(invisible(NA))
+  })
+  #df.get_density
   
-  p0 = ps.CpGprof(df = my.CpGprof,by='pos',gp = gp,my.bed = my.bed)
-  
-  df = df[order(df$beg, df$end),]; df$y = seq(1,dim(df)[1])
-  p1.beg.orig = ps(df,'beg',gp=gp,print=F,my.bed=my.bed,my.title=paste(gp$my.title.wrap,'Sorted by R-loop Beg'))
-  
-  df = df[order(df$end, df$beg),]; df$y = seq(1,dim(df)[1])
-  p1.end.orig = ps(df,'end',gp=gp,print=F,my.bed=my.bed,my.title=paste(gp$my.title.wrap,'Sorted by R-loop End'))
+    # dfd$beg.dens = 
+  # dfe = data.frame(beg=smooth.spline(x = dfd$beg,y=dfd$beg.perc,spar=0.4)$x, begperc=smooth.spline(x = dfd$beg,y=dfd$beg.perc,spar=0.4)$y)
+  # dfd = df.get_density(df,by='beg',gp,my.CpGprof)
+  # dfd2 = merge(df,dfd,by=c('beg'))
 
+  #get cor
+  # 
+  # ggplot(dfd2,aes(GCcont,GCskew)) +
+  #   geom_point(aes(y=GCskew),color='red4',size=0.5) + stat_smooth(aes(y=GCskew),method='lm',formula=y~x,color='red4',size=0.5) +
+  #   geom_point(aes(y=ATskew),color='blue4',size=0.5) + stat_smooth(aes(y=ATskew),method='lm',formula=y~x,color='blue4',size=0.5) +
+  #   theme_bw() + theme(panel.grid=element_blank()) +
+  #   coord_cartesian(xlim=c(-0,1),ylim=c(-1,1))
+  # 
+  # ggplot(dfd2,aes(GCcont,GCskew)) +
+  #   geom_line(aes(y=smooth.spline(ATskew,spar=0.4)$y),color='red4',size=1) +
+  #   # stat_smooth(aes(y=ATskew),method='lm',formula=y~x,color='red4') +
+  # #  geom_line(aes(y=Acont),color='red2') +
+  #   geom_line(aes(y=smooth.spline(Acont,spar=0.4)$y),color='red4') +
+  #   # stat_smooth(aes(y=Acont),method='lm',formula=y~x,color='red2') +
+  #   geom_line(aes(y=GCcont),color='green4') +
+  #   # stat_smooth(aes(y=GCcont),method='lm',formula=y~x,color='green4') +
+  #   geom_line(aes(y=GCskew),color='purple4') +
+  #   # stat_smooth(aes(y=GCskew),method='lm',formula=y~x,color='purple4') +
+  #   geom_line(aes(y=beg.perc/8),color='orange') +
+  #   # stat_smooth(aes(y=GCskew),method='lm',formula=y~x,color='orange') +
+  #   #geom_line(data=dfe,aes(x=beg,y=begperc/max(begperc))) +
+  #   
+  #   theme_bw() + theme(panel.grid=element_blank()) +
+  #   coord_cartesian(xlim=c(500,1500),ylim=c(-1,1)) 
+  #  # coord_cartesian(xlim=c(-0,1),ylim=c(-1,1))
+  # 
+  # 
+  # 
+  # plot(dfd$beg,dfd$beg.perc,type='l')
+  # lines(dfd$beg,dfd$GCcont*max(dfd$beg.perc),type='l',col='green4')
+  # #plot(dfd$beg.perc,dfd$GCcont,cex=0.4,col='green4',xlim=c(0,15))
+  # points(dfd$beg.perc,dfd$GCcont,cex=0.4,col='green4')
+  # points(dfd$beg.perc,dfd$GCskew,cex=0.4,col='red4')
+  # plot(dfd$beg.perc,dfd$GCskew)
+  # plot(dfd$beg.perc,dfd$GCcont)
+  # plot(dfd$beg.perc,dfd$GCcont)
+  suppressWarnings({
+    p1.xy = ggplot.xy(df = df,dfclust = dfclust,gp = gp,print = FALSE)
+    p1.CpGprof = ps.CpGprof(df = my.CpGprof,by='pos',gp = gp,my.bed = my.bed)
+    p1.CpGprof.withskew = ps.CpGprof(df = my.CpGprof,by='pos',gp = gp,my.bed = my.bed,with.skew=TRUE)
+    
+    df = df[order(df$beg, df$end),]; df$y = seq(1,dim(df)[1])
+    p1.beg.orig = ps(df,'beg',gp=gp,print=F,my.bed=my.bed,my.title=paste(gp$my.title.wrap,'Sorted by R-loop Beg'))
+    
+    df = df[order(df$end, df$beg),]; df$y = seq(1,dim(df)[1])
+    p1.end.orig = ps(df,'end',gp=gp,print=F,my.bed=my.bed,my.title=paste(gp$my.title.wrap,'Sorted by R-loop End'))
   
-  df = df[order(df$cluster,df$beg, df$end),]; df$y = seq(1,dim(df)[1])
-  p1.beg.clust = ps(df,'beg',gp=gp,print=F,my.group='cluster',my.bed=my.bed,my.title=paste(gp$my.title.wrap,'Clustered & Sorted by R-loop End'))
-  
-  df = df[order(df$cluster,df$end, df$beg),]; df$y = seq(1,dim(df)[1])
-  p1.end.clust = ps(df,'end',gp=gp,print=F,my.group='cluster',my.bed=my.bed,my.title=paste(gp$my.title.wrap,'Clustered & Sorted by R-loop End'))
-  
-  p1 = grid.arrange(p0,p0,p1.beg.orig,p1.end.orig,p1.beg.clust,p1.end.clust,nrow=3)
+    
+    df = df[order(df$cluster,df$beg, df$end),]; df$y = seq(1,dim(df)[1])
+    p1.beg.clust = ps(df,'beg',gp=gp,print=F,my.group='cluster',my.bed=my.bed,my.title=paste(gp$my.title.wrap,'Clustered & Sorted by R-loop End'))
+    
+    df = df[order(df$cluster,df$end, df$beg),]; df$y = seq(1,dim(df)[1])
+    p1.end.clust = ps(df,'end',gp=gp,print=F,my.group='cluster',my.bed=my.bed,my.title=paste(gp$my.title.wrap,'Clustered & Sorted by R-loop End'))
+    
+    #p1 = grid.arrange(p1.xy,p1.CpGprof,p1.beg.orig,p1.end.orig,p1.beg.clust,p1.end.clust,ncol=2)
+    if (gp$C.transform == TRUE) {
+      my.pdfout = pasta('results/simple/',gp$my.title,'_C_transform.pdf')
+    } else {
+      my.pdfout = pasta('results/simple/',gp$my.title,'.pdf')
+    }
+    pdf(file=my.pdfout,width=20,height=40)
+    grid.arrange(p1.CpGprof,p1.CpGprof.withskew,p1.beg.clust,p1.end.clust,p1.beg.orig,p1.end.orig,p1.xy,p1.xy,ncol=2)
+    #grid.arrange(p1.CpGprof,arrangeGrob(p1.xy,p1.xy),arrangeGrob(p1.beg.orig,p1.end.orig),arrangeGrob(p1.beg.clust,p1.end.clust),nrow=2,heights=c(1,3))
+    #grid.arrange(p1.CpGprof,arrangeGrob(p1.xy,p1.beg.orig,p1.beg.clust),arrangeGrob(p1.xy,p1.end.orig,p1.end.clust),nrow=3,heights=c(1,3,3))
+    dev.off()
+  })
+  next
 
   
   doclust = function(df) {

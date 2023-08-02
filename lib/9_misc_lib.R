@@ -343,7 +343,7 @@ ps.get_color.group = function(df,dfclust,gp) {
   return(list(df=tempz2,dfclust=tempzclust))
 }
 
-ps.CpGprof = function(df,by,gp,my.bed=data.frame(),print=F,my.title=NA) {
+ps.CpGprof = function(df,by,gp,my.bed=data.frame(),print=F,my.title=NA,with.skew=F) {
   my.by = by
   if (is.na(my.title)) {my.title = ps.get_my.title.if.NA(df,gp)}
   print(my.title)
@@ -353,19 +353,43 @@ ps.CpGprof = function(df,by,gp,my.bed=data.frame(),print=F,my.title=NA) {
   
   ylim0 = gp$minY
   ylim1 = 1.5
+  purps = brewer.pal(9,'Purples')
+
   p = ggplot(temp,aes(df[,my.by],y=index)) +
-    geom_line(aes(df[,my.by],y=CGdens),color='blue2') +
-    geom_line(aes(df[,my.by],y=GCcont),color='green4') +
-    geom_line(aes(df[,my.by],y=GCskew+0.5),color='red2') +
-    geom_line(aes(df[,my.by],y=Gcont),color='red2') +
+    geom_line(aes(df[,my.by],y=GCskew+0.5),color='red4') +
     theme_bw() +
     theme(plot.title = element_text(size=10), axis.title.x = element_text(size=10), legend.position='none') +
     ggtitle(my.title) +
     coord_cartesian(ylim=c(ylim0,1.2*ylim1),xlim=c(xlim0,xlim1)) +
-    annotate(geom='segment',x=gp$minX,xend=gp$maxX,y=0.5,yend=0.5,lty=2) +
+    annotate(geom='segment',x=gp$minX,xend=gp$maxX,y=0.250,yend=0.250,lty=2) +
+    annotate(geom='segment',x=gp$minX,xend=gp$maxX,y=0.125,yend=0.125,lty=2) +
     xlab('Position in Plasmid (bp)') + ylab('CG Dens & GC Cont') +
     annotate(geom='segment',x=xlim1*0.9,y=0,xend=xlim1*0.9,yend=ylim1,color='red4') +
     annotate(geom='text',x=xlim1,y=0.5,label='GC Skew',angle=-90,vjust=0,size=4,color='red4')
+  if (with.skew==TRUE) {
+    p = p + 
+      geom_line(aes(df[,my.by],y=CGdens),color='blue2',alpha=0.25) +
+      geom_line(aes(df[,my.by],y=GCcont),color='green4',alpha=0.25) +
+      geom_line(aes(df[,my.by],y=Acont),color='red4') +
+      geom_line(aes(df[,my.by],y=Ccont),color='blue4') +
+      geom_line(aes(df[,my.by],y=Gcont),color=purps[4]) +
+      geom_line(aes(df[,my.by],y=Tcont),color='green4') +
+      geom_line(aes(df[,my.by],y=G2cont),color=purps[5]) +
+      geom_line(aes(df[,my.by],y=G3cont),color=purps[7]) +
+      geom_line(aes(df[,my.by],y=G4cont),color=purps[9]) +
+      geom_line(aes(df[,my.by],y=GAskew+0.5),color='purple3') +
+      geom_line(aes(df[,my.by],y=GTskew+0.5),color='purple4')
+  } else {
+    p = p + geom_line(aes(df[,my.by],y=CGdens),color='blue2') +
+      geom_line(aes(df[,my.by],y=GCcont),color='green4') +
+      geom_line(aes(df[,my.by],y=Acont),color='red4') +
+      geom_line(aes(df[,my.by],y=Ccont),color='blue4') +
+      geom_line(aes(df[,my.by],y=Gcont),color=purps[4]) +
+      geom_line(aes(df[,my.by],y=Tcont),color='green4') +
+      geom_line(aes(df[,my.by],y=G2cont),color=purps[5]) +
+      geom_line(aes(df[,my.by],y=G3cont),color=purps[7]) +
+      geom_line(aes(df[,my.by],y=G4cont),color=purps[9])
+  }
   for (i in seq(0,ylim1,0.1)) {
     i0 = i
     i1 = i + 0.1
@@ -401,3 +425,6 @@ ps.CpGprof = function(df,by,gp,my.bed=data.frame(),print=F,my.title=NA) {
     return(p)
   }
 }
+
+
+
