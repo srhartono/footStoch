@@ -27,7 +27,7 @@ gp = list(
   divby=25
 )
 
-myVR = 20
+myVR = 10
 
 for (myVR in seq(1,31)) {
   print(myVR)
@@ -54,12 +54,12 @@ for (myVR in seq(1,31)) {
   gp$divby = triclust_get_divby(mytitle=gp$mytitle)$triclust.divby
   gp$promoter = mybed[mybed$feature == 'T7_Promoter',]
   # Get BED and FA sequence
-  myfa  = FASTAS[FASTAS$chr == myparams$gene,]
+  my.fa  = FASTAS[FASTAS$chr == myparams$gene,]
   mybed = BEDS[BEDS$chr == myparams$gene,]
-  myfa$amp.beg = mybed[mybed$feature == "FW_Primer",]$beg-10
-  myfa$amp.end = mybed[mybed$feature == "RV_Primer",]$end+10
+  my.fa$amp.beg = mybed[mybed$feature == "FW_Primer",]$beg-10
+  my.fa$amp.end = mybed[mybed$feature == "RV_Primer",]$end+10
   #myfa$amp.seq = gsub(paste('^.{',myfa$amp.beg,'}','.(.+)','.{',myfa$amp.end,'}','$'),"\\1",myfa$seq,perl=T)
-  myfa$amp.seq = myfa$seq
+  my.fa$amp.seq = my.fa$seq
   # myfapos = get_fapos(myfa)
   # beg2 = data.frame(beg=myfapos$index,Cpos = myfapos$Cindex,begC = myfapos$Cindex,begdiff = myfapos$diff)
   # end2 = data.frame(end=myfapos$index+1,Cpos = myfapos$Cindex - 1,endC = myfapos$Cindex-1)
