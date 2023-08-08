@@ -1,4 +1,4 @@
-setwd("D:/cygwin64/home/mitochy/Work/Project/Ethan/footStoch/")
+#setwd("D:/cygwin64/home/mitochy/Work/Project/Ethan/footStoch/")
 library(plotly)
 library(grid)
 library(ggplot2)
@@ -20,12 +20,12 @@ get_genes = function(file) {
   return(genes)
 }
 
-get_mytitle2 = function(file,gene,treat) {
+get_my.title2 = function(file,gene,treat) {
   bed = BEDS[BEDS$chr == gene,]
   filename = basename(file)
   filename = gsub("^(.+).BED$","\\1",filename,perl=T)
-  mytitle = paste(filename,"_gene",gene,"_desc",treat,sep="")
-  return(mytitle)
+  my.title = paste(filename,"_gene",gene,"_desc",treat,sep="")
+  return(my.title)
 }
 
 get_dm2 = function(file, gene) {
@@ -40,7 +40,7 @@ get_dm2 = function(file, gene) {
   }
   df = df[order(df$beg, df$end),]
   if (!'file' %in% colnames(df)) {
-    df$file = "DUMMY"
+    df$file = "DUMmy."
   }
 
   if (defined(BEDS[BEDS$chr == gene,])) {
@@ -62,7 +62,7 @@ get_dm2 = function(file, gene) {
   rownames(df) = paste(seq(1,dim(df)[1]))
   
   dm = df;
-  dm$cluster = 1#myclust[,1]
+  dm$cluster = 1#my.clust[,1]
   dm$clusterbeg = 1
   dm$clusterend = 1
   
@@ -84,7 +84,7 @@ get_dm2 = function(file, gene) {
   return(dm)
 }
 
-get_dm3 = function(dm2, divby,threshold,useSD=0,myverbose=F) {
+get_dm3 = function(dm2, divby,threshold,useSD=0,my.verbose=F) {
   dm2 = dm2[order(dm2$beg,dm2$end),]
   begtotal = c()
   endtotal = c()
@@ -100,7 +100,7 @@ get_dm3 = function(dm2, divby,threshold,useSD=0,myverbose=F) {
   }
   minbegI = min(ai(dm2$beg/divby))
   maxbegI = max(ai(dm2$beg/divby))
-  dm3return = data.frame(pos=c(minbegI,maxbegI),total=c(size(dm2),size(dm2)),type=c('beg','end'),mythres=threshold)
+  dm3return = data.frame(pos=c(minbegI,maxbegI),total=c(size(dm2),size(dm2)),type=c('beg','end'),my.thres=threshold)
   dm2temp = data.frame(pos=ai(seq(1,5000/divby)),begtotal=begtotal,endtotal=endtotal)
 
   if (useSD == 1) {
@@ -158,7 +158,7 @@ get_dm3 = function(dm2, divby,threshold,useSD=0,myverbose=F) {
         last_pos = -1
         last_begtotal = -1
       } else if (curr_begtotal >= threshold & best_i != -1 & last_pos < curr_pos & last_pos >= curr_pos - 2) {
-        if (myverbose == T) {cat("i=",i,"currpos=",curr_pos,",best_i=",best_i,"bset_pos=",last_pos,"sum=",last_begtotal+curr_begtotal,"\n")}
+        if (my.verbose == T) {cat("i=",i,"currpos=",curr_pos,",best_i=",best_i,"bset_pos=",last_pos,"sum=",last_begtotal+curr_begtotal,"\n")}
         dm3$begtotal[best_i] = dm3$begtotal[best_i] + curr_begtotal
         dm3$begtotal[i] = 0
         best_i = best_i
@@ -173,7 +173,7 @@ get_dm3 = function(dm2, divby,threshold,useSD=0,myverbose=F) {
   }
   
   #for debugging
-  if (myverbose == T) {
+  if (my.verbose == T) {
     print(cbind(dm2temp,dm3))
   }
   
@@ -194,7 +194,7 @@ get_dm3 = function(dm2, divby,threshold,useSD=0,myverbose=F) {
         last_pos = -1
         last_endtotal = -1
       } else if (curr_endtotal >= threshold & best_i != -1 & last_pos > curr_pos & last_pos <= curr_pos + 2) {
-        if (myverbose == T) {cat("i=",i,"currpos=",curr_pos,",best_i=",best_i,"bset_pos=",last_pos,"sum=",last_endtotal+curr_endtotal,"\n")}
+        if (my.verbose == T) {cat("i=",i,"currpos=",curr_pos,",best_i=",best_i,"bset_pos=",last_pos,"sum=",last_endtotal+curr_endtotal,"\n")}
         dm3$endtotal[best_i] = dm3$endtotal[best_i] + curr_endtotal
         dm3$endtotal[i] = 0
         best_i = best_i
@@ -208,7 +208,7 @@ get_dm3 = function(dm2, divby,threshold,useSD=0,myverbose=F) {
     }
   }
   #for debugging
-  if (myverbose == T) {
+  if (my.verbose == T) {
     print(cbind(dm2temp,dm3))
   }
   if (defined(dm3[dm3$begtotal < threshold,])) {
@@ -218,10 +218,10 @@ get_dm3 = function(dm2, divby,threshold,useSD=0,myverbose=F) {
     dm3[dm3$endtotal < threshold,]$endtotal = 0
   }
 
-  if (myverbose == T) {
+  if (my.verbose == T) {
     print(cbind(dm2temp,dm3))
   }
-#  mythres
+#  my.thres
   #cbind(dm2temp,dm3)
   
   # 
@@ -252,14 +252,14 @@ get_dm3 = function(dm2, divby,threshold,useSD=0,myverbose=F) {
       dm3beg = subset(dm3[dm3$begtotal > threshold,],select=c("pos","begtotal")); colnames(dm3beg) = c("pos","total")
       dm3beg$type = 'beg'
       dm3beg$divby = divby
-      dm3beg$mythres = threshold
+      dm3beg$my.thres = threshold
     }
     dm3end = data.frame()
     if (defined(dm3[dm3$endtotal > threshold,])) {
       dm3end = subset(dm3[dm3$endtotal > threshold,],select=c("pos","endtotal")); colnames(dm3end) = c("pos","total")
       dm3end$type = 'end'
       dm3end$divby = divby
-      dm3end$mythres = threshold
+      dm3end$my.thres = threshold
     }
     #dm3end$pos = dm3end$pos + 1
     #initgraph(dm2,dm3,divby,genewant,threshold)
@@ -267,7 +267,7 @@ get_dm3 = function(dm2, divby,threshold,useSD=0,myverbose=F) {
   }
 }
 
-initgraph = function(dm2, dm3,divby,mygene="NA",threshold=0) {
+initgraph = function(dm2, dm3,divby,my.gene="NA",threshold=0) {
   dm2$begD = ai(dm2$beg/divby)
   dm2$endD = ai(dm2$end/divby)
   dm2b = get_dm2b(dm2,divby,threshold)
@@ -362,9 +362,9 @@ plot_ly_this = function(temp3) {
   return(p1)
 }
 
-mydir = './resources/bed/INVITRO/ALL/'
-files = dir(mydir,".BED$")
-files = paste(normalizePath(dirname(files)),mydir,files,sep="/")
+my.dir = './resources/bed/INVITRO/ALL/'
+files = dir(my.dir,".BED$")
+files = paste(normalizePath(dirname(files)),my.dir,files,sep="/")
 #filesInd = 9
 
 total_todo = 0
@@ -404,18 +404,18 @@ for (filesInd in seq(1,size(files))) {
       dm1[is.na(dm1$treat),]$treat = "NONE"
     }
 
-    mytreats = unique(dm1$treat)
-    mytreats = mytreats[order(mytreats)]
-    for (mytreatsInd in seq(1,size(mytreats))) {
-      curr.treat = mytreats[mytreatsInd]
+    my.treats = unique(dm1$treat)
+    my.treats = my.treats[order(my.treats)]
+    for (my.treatsInd in seq(1,size(my.treats))) {
+      curr.treat = my.treats[my.treatsInd]
       dm2 = dm1[dm1$treat == curr.treat,]
-      mytitle = get_mytitle2(curr.file,curr.gene,curr.treat)
+      my.title = get_my.title2(curr.file,curr.gene,curr.treat)
       total_todo = total_todo + 1
 
       files2 = c(files2,curr.file)
       genes2 = c(genes2,curr.gene)
       treat2 = c(treat2,curr.treat)
-      print(paste('      ',curr.gene,mytreatsInd,curr.treat,size(dm2),length(treat2),total_todo))
+      print(paste('      ',curr.gene,my.treatsInd,curr.treat,size(dm2),length(treat2),total_todo))
       
     }
   }
@@ -450,7 +450,7 @@ for (currInd in seq(lastdone,loopend)) {
   curr.files = files2[currInd]
   curr.genes = genes2[currInd]
   curr.treat = treat2[currInd]
-  mytitle = get_mytitle2(curr.files,curr.genes,curr.treat)
+  my.title = get_my.title2(curr.files,curr.genes,curr.treat)
   
   if (last.files != curr.files) {
     dm1 = get_dm2(curr.files,curr.genes)
@@ -477,7 +477,7 @@ for (currInd in seq(lastdone,loopend)) {
     dm2 = dm1[dm1$treat == curr.treat,]
   }
   
-  final3.temp = main(dm1,dm2,mytitle)
+  final3.temp = main(dm1,dm2,my.title)
   if (defined(final3.temp)) {
     final3.temp$treat = curr.treat
     final3.temp$gene = curr.genes
@@ -517,8 +517,8 @@ for (currInd in seq(lastdone,loopend)) {
 #     
 #     if (size(unique(dm1$treat)) == 0) {
 #       dm2 = dm1
-#       mytitle = get_mytitle2(genes,curr.gene,'NA',basename(files[filesInd]))
-#       print(paste('      ',mytreatsInd,'NA',size(dm2)))
+#       my.title = get_my.title2(genes,curr.gene,'NA',basename(files[filesInd]))
+#       print(paste('      ',my.treatsInd,'NA',size(dm2)))
 #       current_todo = current_todo + 1
 #       # final3.temp = main(dm1,dm2)
 #       # final3.temp$treat = curr.treat
@@ -530,13 +530,13 @@ for (currInd in seq(lastdone,loopend)) {
 #       }
 #       
 #     } else {
-#       mytreats = unique(dm1$treat)
-#       mytreats = mytreats[order(mytreats)]
-#       for (mytreatsInd in seq(1,size(mytreats))) {
-#         curr.treat = mytreats[mytreatsInd]
+#       my.treats = unique(dm1$treat)
+#       my.treats = my.treats[order(my.treats)]
+#       for (my.treatsInd in seq(1,size(my.treats))) {
+#         curr.treat = my.treats[my.treatsInd]
 #         dm2 = dm1[dm1$treat == curr.treat,]
-#         mytitle = get_mytitle2(genes,curr.gene,curr.treat,basename(files[filesInd]))
-#         print(paste('      ',mytreatsInd,curr.treat,size(dm2)))
+#         my.title = get_my.title2(genes,curr.gene,curr.treat,basename(files[filesInd]))
+#         print(paste('      ',my.treatsInd,curr.treat,size(dm2)))
 #         current_todo = current_todo + 1
 #         if (current_todo %% 100 == 0) {
 #           print(paste('Done',current_todo,'/',total_todo))
@@ -552,60 +552,60 @@ for (currInd in seq(lastdone,loopend)) {
 #   }
 # }
 
-main = function(dm1, dm2,mytitle,mydebug=F) {
+main = function(dm1, dm2,my.title,my.debug=F) {
   dm4 = dm2[1:4]
   dim(dm4)
   
   
   #FUS: 50, 25, 25
   divby = 50
-  mythres = ai(sqrt(dim(dm4)[1]/9230)*25)
-  mythres2 = ai(sqrt(dim(dm4)[1]/9230)*25)
-  mythres
+  my.thres = ai(sqrt(dim(dm4)[1]/9230)*25)
+  my.thres2 = ai(sqrt(dim(dm4)[1]/9230)*25)
+  my.thres
   
-  if (length(grep("T7",mytitle,ignore.case=TRUE,perl=TRUE)) > 0) {
+  if (length(grep("T7",my.title,ignore.case=TRUE,perl=TRUE)) > 0) {
     #T7: 25, 100, 100
     divby = 25
-    mythres = ai(sqrt(dim(dm4)[1]/9230)*100)
-    mythres2 = ai(sqrt(dim(dm4)[1]/9230)*100)
-    mythres
-  } else if (length(grep("PFC53.+T3Term",mytitle,ignore.case = TRUE,perl=TRUE)) > 0) {
+    my.thres = ai(sqrt(dim(dm4)[1]/9230)*100)
+    my.thres2 = ai(sqrt(dim(dm4)[1]/9230)*100)
+    my.thres
+  } else if (length(grep("PFC53.+T3Term",my.title,ignore.case = TRUE,perl=TRUE)) > 0) {
     #pFC53_T3Term: 15,max(50 etc)
     divby = 15
-    mythres = max(50,ai(sqrt(dim(dm4)[1]/9230)*100))
-    mythres2 = max(50,ai(sqrt(dim(dm4)[1]/9230)*100))
-    mythres
-  } else if (length(grep("pFC53.+ApaLI",mytitle,ignore.case = TRUE,perl=TRUE)) > 0) {
+    my.thres = max(50,ai(sqrt(dim(dm4)[1]/9230)*100))
+    my.thres2 = max(50,ai(sqrt(dim(dm4)[1]/9230)*100))
+    my.thres
+  } else if (length(grep("pFC53.+ApaLI",my.title,ignore.case = TRUE,perl=TRUE)) > 0) {
     #pFC53_ApaLI: 25,ai
     divby = 25
-    mythres = ai(sqrt(dim(dm4)[1]/9230)*100)
-    mythres2 = ai(sqrt(dim(dm4)[1]/9230)*100)
-    mythres
-  } else if (length(grep("pFC9.+ApaLI",mytitle,ignore.case = TRUE,perl=TRUE)) > 0) {
+    my.thres = ai(sqrt(dim(dm4)[1]/9230)*100)
+    my.thres2 = ai(sqrt(dim(dm4)[1]/9230)*100)
+    my.thres
+  } else if (length(grep("pFC9.+ApaLI",my.title,ignore.case = TRUE,perl=TRUE)) > 0) {
     #pFC9_ApaLI: 25,ai
     divby = 25
-    mythres = ai(sqrt(dim(dm4)[1]/9230)*100)
-    mythres2 = ai(sqrt(dim(dm4)[1]/9230)*100)
-    mythres
-  } else if (length(grep("pFC9",mytitle,ignore.case = TRUE,perl=TRUE)) > 0) {
+    my.thres = ai(sqrt(dim(dm4)[1]/9230)*100)
+    my.thres2 = ai(sqrt(dim(dm4)[1]/9230)*100)
+    my.thres
+  } else if (length(grep("pFC9",my.title,ignore.case = TRUE,perl=TRUE)) > 0) {
     #pFC9_sgRNA: 15,ai
     divby = 50
-    mythres = ai(sqrt(dim(dm4)[1]/9230)*100)
-    mythres2 = ai(sqrt(dim(dm4)[1]/9230)*100)
-    mythres
+    my.thres = ai(sqrt(dim(dm4)[1]/9230)*100)
+    my.thres2 = ai(sqrt(dim(dm4)[1]/9230)*100)
+    my.thres
   }
-  #mythres=15
-  #mythres2 =15
-  print(paste(mytitle,'; divby',divby,'; threshold',mythres,mythres2))
+  #my.thres=15
+  #my.thres2 =15
+  print(paste(my.title,'; divby',divby,'; threshold',my.thres,my.thres2))
 
-  #mythres=8
+  #my.thres=8
   finalbeg = data.frame()
   finalend = data.frame()
   final0 = data.frame()
   
   dm2b = get_dm2b(dm2,divby)
   dm2c = get_dm2c(dm2,divby)
-  dm3 = get_dm3(dm2, divby, mythres,myverbose=T)
+  dm3 = get_dm3(dm2, divby, my.thres,my.verbose=T)
   
   yMIN = 0
   yMAX = 5000/divby
@@ -641,11 +641,11 @@ main = function(dm1, dm2,mytitle,mydebug=F) {
   # }  
   # goodends
   
-  p = initgraph(dm2, dm3, divby,mytitle,mythres)
+  p = initgraph(dm2, dm3, divby,my.title,my.thres)
   p2 = p
   p2.beg = p
   p2.end = p
-  if (mydebug == T) {print(initgraph2(p2,goodbegs,goodends))}
+  if (my.debug == T) {print(initgraph2(p2,goodbegs,goodends))}
   
   for (goodbegsInd in seq(1,(length(goodbegs)-1))) {
     if (goodbegsInd == 1) {#length(goodbegs)-1) {
@@ -656,7 +656,7 @@ main = function(dm1, dm2,mytitle,mydebug=F) {
     x0 = goodbegs[goodbegsInd+0]
     x1 = goodbegs[goodbegsInd+1]
     print(paste(x0))
-    if (defined(dm3[dm3$type == 'end' & dm3$total >= mythres2,]) == FALSE) {next}
+    if (defined(dm3[dm3$type == 'end' & dm3$total >= my.thres2,]) == FALSE) {next}
     #if (defined(dm2[ai(dm2$beg / divby) > x0 & ai(dm2$beg/divby) <= x1,]) == FALSE) {next}
     #dm2.end = dm2[ai(dm2$beg / divby) > x0 & ai(dm2$beg/divby) <= x1,]
     for (goodendsInd in seq(1,length(goodends)-2)) {
@@ -675,12 +675,12 @@ main = function(dm1, dm2,mytitle,mydebug=F) {
       if (dim(dm2[
         ai(dm2$beg / divby) > x0 & ai(dm2$beg/divby) <= x1 &
         ai(dm2$end / divby) >= y1-1 & ai(dm2$end/divby) <= y1,
-        ])[1] < mythres) {next}
+        ])[1] < my.thres) {next}
       print(paste('USED! (',x0,',',y0,') - (',x1,',',y1,') ',dim(dm2.end)[1],' ',sep=''))
 #      print(defined(dm2.end[ai(dm2.end / divby) > y0 & ai(dm2$end/divby) <= y1,]))
 #      if (defined(dm2.end[ai(dm2.end / divby) > y0 & ai(dm2$end/divby) <= y1,])) {
 #        dm2.end2 = dm2.end[ai(dm2.end / divby) > y0 & ai(dm2$end/divby) <= y1,]
-#        if (dim(dm2.end2)[1] > mythres2) {
+#        if (dim(dm2.end2)[1] > my.thres2) {
           print(paste('(',x0,',',y0,') - (',x1,',',y1,')',sep=''))
           final.temp.beg0 = data.frame(x=x0,y=y1,type='beg0')
           final.temp.beg1 = data.frame(x=min(x1,y1),y=y1,type='beg1')
@@ -703,7 +703,7 @@ main = function(dm1, dm2,mytitle,mydebug=F) {
     
     # dm2.end = dm2[ai(dm2$beg / divby) > x0 & ai(dm2$beg/divby) <= x1,]
     # dm2b.end = get_dm2b(dm2.end,divby)
-    # dm3.end = get_dm3(dm2.end,divby,mythres2)
+    # dm3.end = get_dm3(dm2.end,divby,my.thres2)
     # goodends.temp = get_good(dm2b.end,dm3.end,'end')
     # 
     # if (size(goodends.temp) == 0) {next}
@@ -727,12 +727,12 @@ main = function(dm1, dm2,mytitle,mydebug=F) {
     #     geom_point(data=final.temp.beg1,aes(x=x,y=y),color=rgb(0,0,1,1),pch=15)
     # }
   }
-  if (mydebug == T) {print(initgraph2(p2,goodbegs,goodends))}
+  if (my.debug == T) {print(initgraph2(p2,goodbegs,goodends))}
 
   p2.save = p2
-  # myx.save = myx
-  # myy.save = myy
-  # mytype.save = mytype
+  # my.x.save = my.x
+  # my.y.save = my.y
+  # my.type.save = my.type
   #p2 = p
   for (goodendsInd in seq(1,length(goodends)-1)) {
 #  for (i in seq(length(goodends),1,-1)) {
@@ -745,7 +745,7 @@ main = function(dm1, dm2,mytitle,mydebug=F) {
     y1 = goodends[goodendsInd+1]
     print(goodendsInd)
     
-    if (defined(dm3[dm3$type == 'beg' & dm3$total >= mythres2,]) == FALSE) {next}
+    if (defined(dm3[dm3$type == 'beg' & dm3$total >= my.thres2,]) == FALSE) {next}
     if (defined(dm4[ai(dm4$end / divby) > y0 & ai(dm4$end/divby) <= y1,]) == FALSE) {next}
 
     for (goodbegsInd in seq(1,length(goodbegs)-2)) {
@@ -764,10 +764,10 @@ main = function(dm1, dm2,mytitle,mydebug=F) {
       if (dim(dm2[
         ai(dm2$beg / divby) > x0 & ai(dm2$beg/divby) <= x1 &
         ai(dm2$end / divby) >= y1-1 & ai(dm2$end/divby) <= y1,
-      ])[1] < mythres) {next}
+      ])[1] < my.thres) {next}
       print(paste('USED! (',x0,',',y0,') - (',x1,',',y1,') ',dim(dm2.beg)[1],' ',sep=''))
       # beg2 = dm2[ai(dm2$end / divby) >= y0 & ai(dm2$end/divby) < y1,]
-      # goodbegs.temp = get_dm3(beg2,divby,mythres2)
+      # goodbegs.temp = get_dm3(beg2,divby,my.thres2)
       # if (defined(goodbegs.temp[goodbegs.temp$type == 'beg',])) {
       #   goodbegs.temp = goodbegs.temp[goodbegs.temp$type == 'beg',]
       # }
@@ -799,7 +799,7 @@ main = function(dm1, dm2,mytitle,mydebug=F) {
         geom_point(data=final.temp.end1,aes(x=x,y=y),color=rgb(1,0,0,1),pch=15)
     }
   }
-  if (mydebug == T) {print(initgraph2(p2,goodbegs,goodends))}
+  if (my.debug == T) {print(initgraph2(p2,goodbegs,goodends))}
   print(initgraph2(p2.beg,goodbegs,goodends))
   print(initgraph2(p2.end,goodbegs,goodends))
 
@@ -849,16 +849,16 @@ main = function(dm1, dm2,mytitle,mydebug=F) {
   final0$divby = divby
   
 
-  save(final0,paste('resources/CLUSTRDS/',mytitle,'.RDS',sep=''))
+  save(final0,paste('resources/CLUSTRDS/',my.title,'.RDS',sep=''))
   return(final0)
   
-  # mydebug drawing
+  # my.debug drawing
   p2 = ggplot(dm2b,aes(beg,end)) +
     geom_point(aes(alpha=sqrt(sum),size=sqrt(sum))) +
     geom_point(pch=".",color="grey") +
     scale_size_continuous(range=c(0.1,1)) +
     scale_alpha_continuous(range=c(0.1,1)) +
-    theme_bw() + coord_cartesian(xlim=c(0,5000/divby),ylim=c(0,5000/divby)) +    ggtitle(mytitle) +
+    theme_bw() + coord_cartesian(xlim=c(0,5000/divby),ylim=c(0,5000/divby)) +    ggtitle(my.title) +
     annotate(geom="segment",x=0,y=0,xend=5000/divby,yend=5000/divby) + theme(legend.position = "top")
   p3 = p2 +
     geom_point(data=final0,aes(x=x0end,y=y0end),color = "red2",shape=15) +
@@ -866,7 +866,7 @@ main = function(dm1, dm2,mytitle,mydebug=F) {
     geom_rect(data=final0,aes(x=x0end,y=y0end,xmin=x0end,ymin=y0end,xmax=x1beg,ymax=y1beg),fill=NA,color='black')
   p4 = ggplot(dm2c,aes(x,total)) +
     geom_line() +
-    theme_bw() + coord_cartesian(xlim=c(0,5000/divby),ylim=c(0,max(dm2c$total))) +    ggtitle(mytitle) +
+    theme_bw() + coord_cartesian(xlim=c(0,5000/divby),ylim=c(0,max(dm2c$total))) +    ggtitle(my.title) +
     geom_segment(data=final0,aes(x=x0end,y=0,xend=x0end,yend=max(dm2c$total)),lty=2,color='red4')
   
   dm2$begD = ai(dm2$beg/divby)
@@ -908,12 +908,12 @@ main = function(dm1, dm2,mytitle,mydebug=F) {
   dm2 = dm2[order(dm2$cluster,dm2$begD,dm2$endD),]
   dm2$y = seq(1,dim(dm2)[1])
   
-  mycolors = c(brewer.pal(9,"Set1"),brewer.pal(9,"Set3"))
-  mybreaks = seq(0,length(mycolors)-1)
+  my.colors = c(brewer.pal(9,"Set1"),brewer.pal(9,"Set3"))
+  my.breaks = seq(0,length(my.colors)-1)
   
   p5 = ggplot(dm2[dm2$cluster!= -1,],aes(begD,endD)) +
     geom_segment(aes(x=begD,xend=endD,y=y,yend=y,color=as.factor(cluster))) +
-    theme_bw() + coord_cartesian(xlim=c(0,5000/divby),ylim=c(0,dim(dm2)[1])) +    ggtitle(mytitle) +
+    theme_bw() + coord_cartesian(xlim=c(0,5000/divby),ylim=c(0,dim(dm2)[1])) +    ggtitle(my.title) +
     theme(legend.position = "top")
   
   dm2temp = aggregate(dm2$begD,by=list(dm2$cluster),min);colnames(dm2temp) = c('cluster','begDmin')
@@ -928,7 +928,7 @@ main = function(dm1, dm2,mytitle,mydebug=F) {
   p6 = p5 +
     geom_segment(data=dm2temp[dm2temp$cluster != -1,],aes(x=x0end,xend=x0end,y=ymin,yend=ymax,color=af(cluster))) +
     geom_segment(data=dm2temp[dm2temp$cluster != -1,],aes(x=y1beg,xend=y1beg,y=ymin,yend=ymax,color=af(cluster))) +
-      scale_color_manual(values=mycolors,breaks=mybreaks,label=mybreaks)
+      scale_color_manual(values=my.colors,breaks=my.breaks,label=my.breaks)
     #final0,aes(x=x0end,y=y),color='purple') +
     #geom_point(data=final0,aes(x=y0end,y=y),color='red4') +
     #geom_point(data=final0,aes(x=y1beg,y=y),color='blue4') +
@@ -943,11 +943,11 @@ main = function(dm1, dm2,mytitle,mydebug=F) {
   dm2$y = seq(1,size(dm2))
   p7 = ggplot(dm2[dm2$cluster!= -1,],aes(beg,end)) +
     geom_segment(aes(x=beg,xend=end,y=y,yend=y,color=as.factor(cluster))) +
-    theme_bw() + coord_cartesian(xlim=c(0,5000),ylim=c(0,dim(dm2)[1])) +    ggtitle(mytitle) +
+    theme_bw() + coord_cartesian(xlim=c(0,5000),ylim=c(0,dim(dm2)[1])) +    ggtitle(my.title) +
     theme(legend.position = "top") +
     geom_segment(data=dm2temp[dm2temp$cluster != -1,],aes(x=x0end*divby,xend=x0end*divby,y=ymin,yend=ymax,color=af(cluster))) +
     geom_segment(data=dm2temp[dm2temp$cluster != -1,],aes(x=y1beg*divby,xend=y1beg*divby,y=ymin,yend=ymax,color=af(cluster))) +
-      scale_color_manual(values=mycolors,breaks=mybreaks,label=mybreaks)
+      scale_color_manual(values=my.colors,breaks=my.breaks,label=my.breaks)
     
   
   pdf("testpdf.pdf",height=30/2,width=20/2)

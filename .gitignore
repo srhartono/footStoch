@@ -1,3 +1,8 @@
+*DS_Store
+*/*DS_Store
+*/*RDS
+*RDS
+.remove
 .Rproj.user
 .Rhistory
 .RData

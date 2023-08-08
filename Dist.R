@@ -1,4 +1,4 @@
-myparams = list(
+my.params = list(
   gene     = '^T7_init',
   treat    = 'C',
   peaktype = 'TOP',
@@ -7,7 +7,7 @@ myparams = list(
   
 )
 
-myparams_regex = list(
+my.params_regex = list(
   gene = T,
   treat = F,
   peaktype = F,
@@ -15,19 +15,19 @@ myparams_regex = list(
   VR = F
 )
 
-gp$mytitle = get_title(myparams=myparams)
-gp$mytitle.wrap = wrap_title(gp$mytitle,width = 40)
-gp$divby = triclust_get_divby(mytitle=gp$mytitle)$triclust.divby
+gp$my.title = get_title(my.params=my.params)
+gp$my.title.wrap = wrap_title(gp$my.title,width = 40)
+gp$divby = triclust_get_divby(my.title=gp$my.title)$triclust.divby
 
 # Get BED and FA sequence
-myfa  = FASTAS[FASTAS$chr == myparams$gene,]
-mybed = BEDS[BEDS$chr == myparams$gene,]
-myfa$amp.beg = mybed[mybed$feature == "FW_Primer",]$beg-10
-myfa$amp.end = mybed[mybed$feature == "RV_Primer",]$end+10
-myfa$amp.seq = myfa$seq
+my.fa  = FASTAS[FASTAS$chr == my.params$gene,]
+my.bed = BEDS[BEDS$chr == my.params$gene,]
+my.fa$amp.beg = my.bed[my.bed$feature == "FW_Primer",]$beg-10
+my.fa$amp.end = my.bed[my.bed$feature == "RV_Primer",]$end+10
+my.fa$amp.seq = my.fa$seq
 
 # Get PEAKS
-df = slice_df(PEAKS, myparams = myparams,myparams_regex=myparams_regex)
+df = slice_df(PEAKS, my.params = my.params,my.params_regex=my.params_regex)
 
 df$cluster = 0
 df$y = seq(1,dim(df)[1])
@@ -179,7 +179,7 @@ for (cluster in clusters[order(clusters)]) {
   for (VR in VRs[order(VRs)]) {
     print(VR)
     temp5 = temp4[temp4$cluster == cluster & temp4$VR == VR,]
-    temp6 = as.data.frame(matrix(apply(temp5,1,myag),byrow = TRUE,nrow=nrow(temp5),ncol=3000))
+    temp6 = as.data.frame(matrix(apply(temp5,1,my.ag),byrow = TRUE,nrow=nrow(temp5),ncol=3000))
     colnames(temp6) = seq(1,3000)
     temp6.sum = apply(temp6,2,sum)
     temp6.mean = apply(temp6,2,mean)
@@ -209,7 +209,7 @@ for (cluster in clusters[order(clusters)]) {
   }
 }
  
-myag = function(x) {
+my.ag = function(x) {
   temp6 = rep(1,3000)
   temp6[seq(x[2],x[3])] = 1
   return(temp6)

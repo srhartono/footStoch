@@ -1,0 +1,839 @@
+```{r}
+options(max.print = 200)
+source('lib/rl2.lib9.R')
+source('lib/rl2.lib1.R')
+source('../lib/tri.lib.misc.R')
+
+B = file.parse_deltaG()
+Bprint = subset(B[B$type == 'RD.min.DD',],select=c(chunk,B))
+par = list(
+  a = 10,
+  π = pi,
+  C = 1.8,
+  A = 1/10.4,
+  N = 1500,
+  R = 0.0019858775,
+  T = 310
+)
+par$K = (2200 * par$R * par$T) / par$N
+par$n = seq(1,3000)
+par$len = seq(0,1000)
+par$sigmas = c(0,-0.07,-0.14)
+
+# seqgood = join(rep('G',100))
+# seqbad  = join(rep('T',100))
+
+```
+"Whats the ΔG (energy*) to form Rloop with <len> length at <n> bp of a 2000bp long G-Homopolymer which has <sigma> negative supercoiling?"
+
+*lower ΔG = easier to form Rloop
+
+* a   = junction energy (10)
+* n   = Rloop start position
+* len = Rloop length
+
+ΔG(n,len) = a + (2π^2 * C * K) / (4π^2 * C + K * len) * (alpha + len * A)^2 + sum(B[n:n+len])
+
+```{r}
+cat('\nParameters\n',
+paste('- ',paste(names(par),':',par),collapse='\n'),
+'\n-  alpha = N x sigma x A\n\n',
+'\n-  B     = bp.energy = difference between energy to form RNA:DNA and DNA:DNA 
+Example: rGG:dCC vs dGG:dCC ([top strand rGG, bot sstrand dCC] - [top strand dGG, bot strand dCC])
+- bp.energy(rGG:dCC) = -2.2
+- bp.energy(dGG:dCC) = -1.84
+- Δbp.energy(rGG:dCC,dGG:dCC) = -2.2 - (-1.84) = -0.36 (negative -> for GG, it"s more likely to form RNA:DNA than DNA:DNA)
+','
+4 variables: n, len, sigma, my.sequence
+
+ΔG(n,len) = 10 + (32.08 / (71.06 + 0.90 * len) * ((144.23 * sigma) + (0.096 * len)^2) + sum(B[n:n+len])',sep='')
+```
+
+
+```{r}
+cat('\n\n\n0. Read B table
+
+Btable = read.table(BtableFile,sep="")
+\nBtable:\nNuc| B(bp energy)\n--------------\n',
+
+paste(Bprint$chunk[1:15]," | ",Bprint$B[1:15],sep="",collapse="\n"),
+
+'\n(...etc)\n
+
+1. create table of bp.energy for my.sequence (Bfinal)
+
+calc.B2 = function(my.sequence) {
+  # my.sequence is AAAAACCCCCTTTTTGGGGG
+  
+  # create dinucleotide table
+  # i |Nuc
+  # --------
+  # 1  AA
+  # 2  AA
+  # 3  AA
+  # 4  AA
+  # 5  AC
+  # 6  CC
+  # 7  CC
+  # ...(etc)
+  
+  # Merge with Btable
+  # i   Nuc  B
+  # -------------
+  # 1   AA  0.60
+  # 2   AA  0.60
+  # 3   AA  0.60
+  # 4   AA  0.60
+  # 5   AC -0.16
+  # 6   CC  0.34
+  # 7   CC  0.34
+
+  my.seq.df      = data.frame(seq(1,nchar(my.sequence)-1),
+                              a=strsplit(my.sequence,"")[[1]][-nchar(my.sequence)],
+                              b=strsplit(my.sequence,"")[[1]][-1]
+                              )
+  my.seq.df$Nuc  = paste(my.seq.df[,1],my.seq.df[,2],sep="")
+  Bfinal = subset(merge(my.seq.df,Btable,by="Nuc"),select=c(index,Nuc,B))
+  Bfinal = Bfinal[order(Bfinal$index),]
+  return(Bfinal)
+}
+
+
+3. Calculate dG at n=n, len=len
+calc.dG = function(n,len,sigma,Bfinal) {
+  dG = 10 + (32.08 / (71.06 + 0.90 * len) * ((144.23 * sigma) + (0.096 * len)^2)) + sum(Bfinal$B[max(1,n):min(n+len,dim(Bfinal)[1])])
+  return(dG)
+}
+
+
+',sep='')
+
+
+```
+
+
+```{r}
+cat('
+    
+','
+## EXAMPLE
+
+"Whats the energy to form Rloop with 1000bp length at 1st bp of a 2000bp long G-Homopolymer which has sigma of -0.07?"
+
+n     = 1 (rloop position)
+len   = 200 (rloop length)
+sigma = -0.07 (negative supercoiling)
+
+ΔG(n,len) = 10 + (32.08 / (71.06 + 0.90 * len) * ((144.23 * sigma) + (len * 0.096)^2) + sum(bp.energy[n:n+len])
+
+
+#################################
+1. Seq Good (2kbp G homopolymer GGGGG...) -> bp.energy GG = -0.36
+
+
+ΔG(1,200) = 10 + (32.08 / (71.06 + 0.90 * 200) * (144.23 * -0.07 + 0.096 * 200)^2) + sum(bp.energy[n:n+len])
+ΔG(1,200) = 10 + 10.59                                                             + 200 * bp.energy(GG)
+ΔG(1,200) = 10 + 10.59                                                             + 200 * -0.36
+ΔG(1,200) = 10 + 10.59                                                          +    -72 
+ΔG(1,200) = -51.4 (likely)
+
+
+
+
+#################################
+2. Seq Bad (2kbp T homopolymer) -> bp.energy TT = 0.8
+
+ΔG(1,200) = 10 + (32.08 / (71.06 + 0.90 * 200) * (144.23 * -0.07 + 0.096 * 200)^2) + 200 * 0.8
+ΔG(1,200) = 10 + 10.59                                                             + 160
+ΔG(1,200) = 180.59 (unlikely)
+
+#################################
+3. Seq Ok (2kbp 85% GC, 0 GC Skew)
+
+ΔG(1,200) = 10 + 10.59 + 41.29
+ΔG(1,200) = 61.88 (more likely)
+
+
+#################################
+4. Seq Good (2kbp 85% GC, 0.5 GC Skew)
+
+ΔG(1,200) = 10 + 10.59 + -4.1
+ΔG(1,200) = 16.49 (even more likely)
+
+
+To get probability of R-loop with len of 0 to 1000, at n position 1 to N in that sequence:
+
+sum1 = 0
+sum2 = 0
+for (i in 1:1000) {
+  for (j in 1:1000) {
+    sum1 = exp(-1*ΔG(n=i,len=j)/(R*T))/
+    sum2 = sum2 + sum(exp(-1*ΔG(n=i,len=j)/(R*T))))
+  
+  }
+
+
+
+')
+```
+
+
+```{r}
+#Example
+seqr = fa.gen_random(n=4000)
+seqr.seqG.CpGprof = fa.get_CpGprof(seqr$seq$seqG,gp=gp,print=TRUE)
+seqr.seqT.CpGprof = fa.get_CpGprof(seqr$seq$seqT,gp=gp,print=TRUE)
+seqr.2c.CpGprof = fa.get_CpGprof(seqr$seq$seq2c,gp=gp,print=TRUE)
+seqr.3c.CpGprof = fa.get_CpGprof(seqr$seq$seq3c,gp=gp,print=TRUE)
+
+
+```
+
+
+
+
+```{r}
+
+# FASTAS.rl2 = BIGFASTAS
+# FASTAS.rl2[grep('pFC53',FASTAS.rl2$gene),]$seq = sapply(FASTAS.rl2[grep('pFC53',FASTAS.rl2$gene),]$seq,revcomp)
+# FASTAS.rl2[grep('pFC53',FASTAS.rl2$gene),]$seq.amp = sapply(FASTAS.rl2[grep('pFC53',FASTAS.rl2$gene),]$seq.amp,revcomp)
+# FASTAS.rl2$type = 'invivo'
+# FASTAS.rl2[grep('pFC|T7',FASTAS.rl2$gene,ignore.case = TRUE),]$type = 'invitro'
+# FASTAS.rl2 = FASTAS.rl2[order(FASTAS.rl2$type,FASTAS.rl2$gene),]
+# saveRDS(FASTAS.rl2,'resources/FASTAS.rl2.RDS')
+FASTAS.rl2 = readRDS('resources/FASTAS.rl2.RDS')
+seqT = seqr$seq$seqT
+seqG = seqr$seq$seqG
+seqgood = seqr$seq$seqgood
+seqok = seqr$seq$seqok
+# seqVR10 = FASTAS.rl2[FASTAS.rl2$chr == 'T7_init_VR_10',]$seq
+# seqVR20 = FASTAS.rl2[FASTAS.rl2$chr == 'T7_init_VR_20',]$seq
+#seqtypes = c(FASTAS.rl2$gene[c(seq(1,32),65,66,73,80,84,88,93,64,seq(33,63))])
+#seqtypes = c(seqtypes,'seqT','seqG','seqgood','seqok','T7_init_VR_10','T7_init_VR_20')
+#myseqs =   c(FASTAS.rl2$seq[ c(seq(1,32),65,66,73,80,84,88,93,64,seq(33,63))])
+#myseqs =   c(myseqs,seqT,seqG,seqgood,seqok,seqVR10,seqVR20)
+len.max = max(par$len)
+seqtypeswant = c("pFC9","T7_init_VR_10","T7_init_VR_20","CALM3","FUS","pFC53_ApaLI","pFC53TVR_10_pair_0_T3TermMix","pFC53TVR_20_pair_0_T3TermMix")
+
+FASTASwant = FASTAS.rl2[FASTAS.rl2$gene %in% seqtypeswant,]
+circ = pasta(FASTASwant$seq,substr(FASTASwant$seq,1,len.max))
+myseqs = c(FASTASwant$seq,circ,seqT,seqG,seqgood,seqok)
+seqtypes = c(FASTASwant$gene,pasta(FASTASwant$gene,'_circ'),"seqT","seqG","seqgood","seqok")
+
+length(seqtypes)
+length(myseqs)
+#myseqs = c(seqVR10,seqVR20,seqT,seqG,seqgood,seqok,seq2a)
+#seqtypes = c('T7_init_VR_10','T7_init_VR_20','seqT','seqG','seqgood','seqok','seq2a')
+#'seqT','seqG','seq1','seq2a','seq3a','seq2b','seq3b','seq2c','seq3c','seq2d','seq3d','seq2e','seq3e')
+B = file.parse_deltaG()
+
+B.sigma = B.precalc(par=par)
+par$window = 200
+
+
+dg.all = data.frame()
+dgseq.all = data.frame()
+dfseq.all = data.frame()
+for (i in 1:length(myseqs)) {
+  seq1 = myseqs[i]
+  N1 = nchar(seq1)
+  seqtype = seqtypes[i]
+  print(paste('\n',i,'/',length(myseqs),': Doing',seqtypes[i]))
+  
+  file.dfseq = pasta('resources/',seqtype,'_',par$window,'_dfseq.RDS')
+  file.dgseq = pasta('resources/',seqtype,'_',par$window,'_dgseq.RDS')
+  file.dgall = pasta('resources/',seqtype,'_',par$window,'_dgall.RDS')
+  # if (!file.exists(file)) {
+  #   next
+  # }
+  
+  print(paste('- rl2.fa.get_chunk',seqtype))
+  if (file.exists(file.dfseq)) {
+    dfseq1 = readRDS(file.dfseq)
+  } else {
+    dfseq1 = rl2.fa.get_chunk(seq1,window=par$window);size(dfseq1);
+    #  dfseq1$i0 = dfseq1$i0 #+ par$window/2
+    rownames(dfseq1) = dfseq1$i0
+    saveRDS(dfseq1,file=file.dfseq)
+    print('  -> save')
+  }  
+  print(paste('- dg.merge',seqtype))
+  if (file.exists(file.dgseq)) {
+    dgseq1 = readRDS(file.dgseq)
+  } else {
+    dgseq1 = subset(dg.merge(B,seq1),select=c(i0,DD,RD,RD.min.DD));size(dgseq1)
+    rownames(dgseq) = dgseq$i0
+    saveRDS(dgseq1,file=file.dgseq)
+    print('  -> save')
+  }
+  # next
+  #file = pasta('resources/',seqtype,'_',par$window,'_.RDS')
+  # if (file.exists(file)) {
+  # #   load(file)
+  #   dgall1$seqtype = seqtype
+  #   dgall1$fileInd = i
+  #   dfseq1$seqtype = seqtype
+  #   dfseq1$fileInd = i
+  #   dgseq1$seqtype = seqtype
+  #   dgseq1$fileInd = i
+  #   dgseq.all = rbind(dgseq.all,dgseq1)
+  #   dfseq.all = rbind(dfseq.all,dfseq1)
+  #   dg.all = rbind(dg.all,dgall1)
+  #   print(paste('- ',file,'exist!'))
+  #   next
+  # } else {
+  #   print(paste('- ',file,'doesnt exist!!!'))
+  # }
+  
+  
+  print(paste('- dg.calc',seqtype))
+  if (file.exists(file.dgall)) {
+    dgall1 = readRDS(file.dgall)
+    dgall1$seqtype = seqtype
+    dgall1$fileInd = i
+    dfseq1$seqtype = seqtype
+    dfseq1$fileInd = i
+    dgseq1$seqtype = seqtype
+    dgseq1$fileInd = i
+    dgseq.all = rbind(dgseq.all,dgseq1)
+    dfseq.all = rbind(dfseq.all,dfseq1)
+    dg.all = rbind(dg.all,dgall1)
+    print(paste('- ',file,'exist!'))
+    next
+  } else {
+    next
+    seq.len.max = seq(1,nchar(seq1) - len.max)
+    mygrid = as.data.frame(expand.grid(n=seq.len.max,m=par$len))
+    mygrid = mygrid[order(mygrid$n,mygrid$m),]
+    mygrid$RD.min.DD = 0
+    #dgseq2 = dgseq$RD.min.DD
+    #rownames(dgseq2) = dgseq$i0
+    mygrid$RD.min.DD = apply(mygrid,1,dgb,dgseq=dgseq1$RD.min.DD)
+    dgall1 = cbind(B.sigma,subset(mygrid,select=-m))
+    #dgall1 = apply(seq.len.max,dg.calc,m.all=par$len,dgseq=dgseq1,dg=B.sigma,seqtype=seqtype)
+    #dgall2 = dg.calclong(seq.len.max,par$len,dgseq1,B.sigma,seqtype=seqtype)
+    dgall1$dgmin00 = dgall1$'0' + dgall1$RD.min.DD
+    dgall1$dgmin07 = dgall1$'-0.07' + dgall1$RD.min.DD
+    dgall1$dgmin14 = dgall1$'-0.14' + dgall1$RD.min.DD
+    print('  -> save')
+    saveRDS(dgall1,file=file.dgall)
+  }
+}
+
+seqwant = c('T7_init_VR_10','T7_init_VR_20','pFC9',
+            'T7_init_VR_10_circ','T7_init_VR_20_circ','pFC9_circ')
+
+dg.all = data.frame()
+dgseq.all = data.frame()
+dfseq.all = data.frame()
+for (i in seq(1,length(seqwant))) {
+  seq1 = myseqs[seqtypes == seqwant[i]]
+  N1 = nchar(seq1)
+  seqtype = seqtypes[seqtypes == seqwant[i]]
+  print(paste('\n',i,'/',length(seqwant),': Doing',seqtype))
+  
+  file.dfseq = pasta('resources/',seqtype,'_',par$window,'_dfseq.RDS')
+  dfseq1 = readRDS(file.dfseq); dfseq1$seqtype = seqtype
+  dfseq.all = rbind(dfseq.all,dfseq1)
+  file.dgseq = pasta('resources/',seqtype,'_',par$window,'_dgseq.RDS')
+  dgseq1 = readRDS(file.dgseq); dgseq1$seqtype = seqtype
+  dgseq.all = rbind(dgseq.all,dgseq1)
+  file.dg = pasta('resources/',seqtype,'_',par$window,'_dgall.RDS')
+  dg1 = readRDS(file.dg); dg1$seqtype = seqtype
+  dg.all = rbind(dg.all,dg1)
+}
+saveRDS(dfseq.all,file='resources/dfseq.all.pFC9.RDS')
+saveRDS(dgseq.all,file='resources/dgseq.all.pFC9.RDS')
+saveRDS(dg.all,file='resources/dg.all.pFC9.RDS')
+
+```
+
+```{r}
+dfseq.all = readRDS(file='resources/dfseq.all.pFC9.RDS')
+dgseq.all = readRDS(file='resources/dgseq.all.pFC9.RDS')
+dg.all    = readRDS(file='resources/dg.all.pFC9.RDS')
+
+dg.all.m = melt(dg.all[,c(-3,-4,-5)],id.vars=colnames(dg.all)[c(1,2,6,7,11)])
+#dg.all.m = melt(dg.all,id.vars = colnames(dg.all)[c(1,2,6,11)])
+dg.all.m$variable = as.character(dg.all.m$variable)
+# 
+# dg.all.m0 = dg.all.m
+# dg.all.m0$a = 0
+# 
+# dg.all.m.a10 = dg.all.m
+# dg.all.m.a10$a = 10
+# 
+# dg.all.m.a25 = dg.all.m
+# dg.all.m.a25$a = 25
+# 
+# dg.all.m.a50 = dg.all.m
+# dg.all.m.a50$a = 50
+# 
+# dg.all.m.a100 = dg.all.m
+# dg.all.m.a100$a = 100
+# 
+# dg.all.m.final = rbind(dg.all.m0,dg.all.m.a10,dg.all.m.a25,dg.all.m.a50,dg.all.m.a100)
+# remove(dg.all.m0)
+# 
+# remove(dg.all.m10)
+# 
+# remove(dg.all.m25)
+# 
+# remove(dg.all.m50)
+# 
+# remove(dg.all.m100)
+# 
+
+
+
+#temp = dg.all.m[grep('dgmin',dg.all.m$variable),]
+
+```
+
+```{r}
+# temp = temp[temp$n <= 2000 & temp$n %% 100 == 0,]
+# temp = temp[temp$seqtype != 'seq2a',]
+# temp0 = temp0[temp0$seqtype != 'seq2a',]
+#temp0 = temp0[temp0$seqtype != 'T7_init_VR_10',]
+#temp0 = temp0[temp0$seqtype != 'T7_init_VR_20',]
+nwant = 600; 
+juncEs = c(0,10,25,50,100)
+pdf("variable_vs_juncEs.pdf",width=15,height=5)
+for (i in 1:length(juncEs)) {
+  temp0 = dg.all.m[dg.all.m$n == nwant,]
+  temp0[temp0$m == 0,]$value = temp0[temp0$m == 0,]$value + 10
+  
+  temp0[temp0$m != 0,]$value = temp0[temp0$m != 0,]$value + juncEs[i]
+  p1 = ggplot(temp0,aes(m,value)) +
+    geom_line(aes(color=af(seqtype))) + theme_bw() +
+    annotate(geom='segment',x=0,xend=1000,y=53.8,yend=53.8,lty=2) +
+    theme_bw() + theme(panel.grid=element_blank()) +
+    ggtitle(paste('Energy of R-loop length at n =',nwant,'juncE (a)=',juncEs[i])) +
+    #scale_color_manual(values=c('seqT' = 'red3','seqok'='purple2','seqgood'='orange3','seqG'='green4','T7_init_VR_20'='blue4')) +
+    facet_grid(.~variable) +ylab('Energy (kcal/mol)') + xlab("Nucleotides in R-loop")
+  print(p1)
+  remove(temp0)
+}
+dev.off()
+```
+
+
+```{r}
+#temp$variable2 = gsub('dgmin(.+)','sigma=\\1',temp$variable,perl=T)
+pdf("seqtype_vs_juncEs.pdf",width=30,height=5)
+#for (seqtype in unique(temp$seqtype)) {
+  for (i in 1:length(juncEs)) {
+    temp0 = dg.all.m[dg.all.m$n == nwant,]# & dg.all.m$seqtype == seqtype,]
+    temp0[temp0$m == 0,]$value = temp0[temp0$m == 0,]$value + 10
+    temp0[temp0$m != 0,]$value = temp0[temp0$m != 0,]$value + juncEs[i]
+
+    p2 = ggplot(temp0,aes(m,value)) +
+      geom_line(aes(color=af(variable))) + theme_bw() +
+      annotate(geom='segment',x=0,xend=1000,y=53.8,yend=53.8,lty=2) +
+      annotate(geom='segment',x=0,xend=1000,y=190,yend=190,lty=2) +
+      annotate(geom='segment',x=0,xend=1000,y=10.8,yend=10.8,lty=2) +
+      theme_bw() + theme(panel.grid=element_blank()) +
+      #scale_color_manual(values=c('brown4','orange','cornflowerblue')) +
+      ggtitle(paste('Energy of R-loop length at n =',nwant,'juncE (a)=',juncEs[i])) +
+      facet_grid(.~seqtype) +
+      #'seqT' = 'red3','seqok'='purple3','seqgood'='orange3','seqG'='green4')) +
+      ylab('Energy (kcal/mol)') + xlab("Nucleotides in R-loop")
+    print(p2)
+    remove(temp0)
+  }
+#}
+```
+
+```{r}
+mwant = 200
+pdf("seqtype_vs_position_m200_juncEs.pdf",width=8*length(unique(dg.all$seqtype)),height=4)
+#for (seqtype in unique(temp$seqtype)) {
+for (i in 1:length(juncEs)) {
+  temp0 = dg.all.m[dg.all.m$m == mwant,]# & dg.all.m$seqtype == seqtype,]
+  temp0[temp0$m == 0,]$value = temp0[temp0$m == 0,]$value + 10
+  temp0[temp0$m != 0,]$value = temp0[temp0$m != 0,]$value + juncEs[i]
+  
+  p3 = ggplot(dfseq.all,aes(x = dfseq.all$i0,temp4$CGdens)) +
+    geom_line(aes(y=CGdens),color='cornflowerblue') +
+    geom_line(aes(y=GCcont),color='green4') +
+    geom_line(aes(y=GCskew+0.5),color='red4') +
+    # geom_line(aes(y=smooth.spline(CGdens,spar=0.1)$y),color='cornflowerblue') +
+    # geom_line(aes(y=smooth.spline(GCcont,spar=0.1)$y),color='green4') +
+    # geom_line(aes(y=smooth.spline(GCskew+0.5,spar=0.1)$y),color='red4') +
+    # ggtitle(paste('Energy of R-loop length at m =',mwant,'juncE (a)=',juncEs[i])) +
+    theme_bw() + theme(panel.grid=element_blank()) +
+    annotate(geom='rect',xmin=587-292+100,xmax=605-292+100,ymin=-10,ymax=10,fill='black',alpha=0.1,color=NA) +
+    annotate(geom='rect',xmin=641-292+100,xmax=841-292+100,ymin=-10,ymax=10,fill='green4',alpha=0.1,color=NA) +
+    annotate(geom='rect',xmin=842-292+100,xmax=1317-292+100,ymin=-10,ymax=10,fill='orange2',alpha=0.1,color=NA) +
+    geom_line(data=temp0,aes(x=n,y=(value-par$dg.minval)/par$dg.maxval,color=af(variable))) +
+    scale_color_manual(values=c('dgmin00'='purple2','dgmin07'='purple3','dgmin14'='purple4')) +
+    #geom_line(data=temp0,aes(x=n,y=smooth.spline((value-par$dg.minval)/par$dg.maxval,spar=0.1)$y,color=af(variable))) +
+    coord_cartesian(xlim=c(0,4000),ylim=c(0,1.4)) +
+    facet_grid(.~seqtype) +
+    ylab('Energy (kcal/mol)') + xlab("Posotion at plasmid (bp)") + annotate(geom='segment',x=0,xend=10000,y=0.5,yend=0.5,lty=2)
+  # 
+  # p2 = ggplot(temp0,aes(m,value)) +
+  #   geom_line(aes(color=af(variable))) + theme_bw() +
+  #   annotate(geom='segment',x=0,xend=1000,y=53.8,yend=53.8,lty=2) +
+  #   annotate(geom='segment',x=0,xend=1000,y=190,yend=190,lty=2) +
+  #   annotate(geom='segment',x=0,xend=1000,y=10.8,yend=10.8,lty=2) +
+  #   theme_bw() + theme(panel.grid=element_blank()) +
+  #   #scale_color_manual(values=c('brown4','orange','cornflowerblue')) +
+  #   ggtitle(paste('Energy of R-loop length at n =',nwant,'juncE (a)=',juncEs[i])) +
+  #   facet_grid(.~seqtype) +
+  #   #'seqT' = 'red3','seqok'='purple3','seqgood'='orange3','seqG'='green4')) +
+  #   ylab('Energy (kcal/mol)') + xlab("Nucleotides in R-loop")
+  print(p3)
+  remove(temp0)
+}
+dev.off()
+#}
+
+#   p2VR20 = ggplot(temp[temp$seqtype == 'T7_init_VR_20' & temp$n == 100,],aes(m,value)) +
+#     geom_line(aes(color=af(variable2))) + theme_bw() +
+#     annotate(geom='segment',x=0,xend=1000,y=53.8,yend=53.8,lty=2) +
+#     annotate(geom='segment',x=0,xend=1000,y=190,yend=190,lty=2) +
+#     annotate(geom='segment',x=0,xend=1000,y=10.8,yend=10.8,lty=2) +
+#     theme_bw() + theme(panel.grid=element_blank()) +
+#     scale_color_manual(values=c('brown4','orange','cornflowerblue')) +
+#     #'seqT' = 'red3','seqok'='purple3','seqgood'='orange3','seqG'='green4')) +
+#     ylab('Energy (kcal/mol)') + xlab("Nucleotides in R-loop")
+#   
+# p2VR10
+# p2VR20
+
+```
+
+
+
+
+```{r}
+par$window = 200
+#dg.all
+par$dg.minval = -55#min(c(dg.all$dgmin07,dg.all$dgmin07,dg.all$dgmin07))
+par$dg.maxval = 300#max(c(dg.all$dgmin07,dg.all$dgmin07,dg.all$dgmin07))
+plot.this = function(dfseq.all,dg.all,window=200,sigma,myseqtype,m,m1=NA,par,a=0) {
+  if (sigma == -0.07) {
+    sigmawant = 'dgmin07'
+  } else if (sigma == 0) {
+    sigmawant = 'dgmin00'
+  } else if (sigma == -0.14) {
+    sigmawant = 'dgmin14'
+  } else {
+    sigmawant = 'dgmin07'
+  }
+  temp3 = dg.all #temp3 = dg.all[dg.all$seqtype == myseqtype,]
+  temp3[temp3$m == 0,sigmawant] = temp3[temp3$m == 0,sigmawant] + 10
+  temp3[temp3$m != 0,sigmawant] = temp3[temp3$m != 0,sigmawant] + a
+  
+  temp4 = dfseq.all[dfseq.all$seqtype == myseqtype,]
+  p = ggplot(temp4,aes(x = temp4$i0+par$window/2,temp4$CGdens)) +
+    geom_line(aes(y=smooth.spline(CGdens,spar=0.2)$y),color='cornflowerblue') +
+    geom_line(aes(y=smooth.spline(GCcont,spar=0.2)$y),color='green4') +
+    geom_line(aes(y=smooth.spline(GCskew+0.5,spar=0.2)$y),color='red4') +
+    ggtitle(paste(myseqtype,sigma,m)) +
+    theme_bw() + theme(panel.grid=element_blank()) +
+    annotate(geom='rect',xmin=587-292,xmax=605-292,ymin=-10,ymax=10,fill='black',alpha=0.1,color=NA) +
+    annotate(geom='rect',xmin=641-292,xmax=841-292,ymin=-10,ymax=10,fill='green4',alpha=0.1,color=NA) +
+    annotate(geom='rect',xmin=842-292,xmax=1317-292,ymin=-10,ymax=10,fill='orange2',alpha=0.1,color=NA) +
+    facet_grid(.~seqtype) +
+    ylab('Energy (kcal/mol)') + xlab("Nucleotides in R-loop") + annotate(geom='segment',x=0,xend=10000,y=0.5,yend=0.5,lty=2)
+  
+  if (is.na(m1)) {
+    temp3b = temp3
+    if (defined(temp3b[temp3b$m == m,])) {
+      temp3b = temp3b[temp3b$m == m,]
+      p2 = p + geom_line(data=temp3b,aes(x=n+par$window/2,y=smooth.spline((temp3b[,sigmawant]-par$dg.minval)/par$dg.maxval)$y),color='purple4',lwd=2) # +    coord_cartesian(xlim=c(0,1000),ylim=c(0,1.4))
+      return(p2)
+      p3 = ggplot(temp3b,aes(x=n+par$window/2,y=(smooth.spline(temp3b[,sigmawant])$y-par$dg.minval)/par$dg.maxval,group=af(m),color=af(m))) +
+        geom_line(aes(color=af(m)),lwd=1) +
+        annotate(geom='rect',xmin=587-292,xmax=605-292,ymin=-10,ymax=10,fill='black',alpha=0.1,color=NA) +
+        annotate(geom='rect',xmin=641-292,xmax=841-292,ymin=-10,ymax=10,fill='green4',alpha=0.1,color=NA) +
+        annotate(geom='rect',xmin=842-292,xmax=1317-292,ymin=-10,ymax=10,fill='orange2',alpha=0.1,color=NA) +
+        theme_bw() + theme(panel.grid=element_blank()) +
+        ylab('Energy (kcal/mol)') + xlab("Nucleotides in R-loop") + annotate(geom='segment',x=0,xend=10000,y=0.5,yend=0.5,lty=2)
+      
+    }
+  } else {
+    temp3b = temp3
+    if (defined(temp3b[temp3b$m >= m & temp3b$m <= m1,])) {
+      temp3b = temp3b[temp3b$m >= m & temp3b$m <= m1,]
+      if (defined(temp3b[temp3b$m %% 50 == 0,])) {
+        temp3b = temp3b[temp3b$m %% 50 == 0,]
+        print(unique(temp3b$m))
+        p2 = p + geom_line(data=temp3b,aes(x=n+par$window/2,y=(temp3b[,sigmawant]-par$dg.minval)/par$dg.maxval,group=af(m),color=af(m)),lwd=0.5) # +    coord_cartesian(xlim=c(0,1000),ylim=c(0,1.4))
+        return(p2)
+        p3 = ggplot(temp3b,aes(x=n+par$window/2,y=(temp3b[,sigmawant]-par$dg.minval)/par$dg.maxval,group=af(m),color=af(m))) +
+          geom_line(aes(color=af(m)),lwd=1) +
+          theme_bw() + theme(panel.grid=element_blank()) +
+          ylab('Energy (kcal/mol)') + xlab("Nucleotides in R-loop") + annotate(geom='segment',x=0,xend=10000,y=0.5,yend=0.5,lty=2)
+        
+      }
+    }
+    else {
+      temp3b = temp3
+      if (defined(temp3b[temp3b$m == m,])) {
+        temp3b = temp3b[temp3b$m == m,]
+        p2 = p + geom_line(data=temp3b,aes(x=n+par$window/2,y=smooth.spline((temp3b[,sigmawant]-par$dg.minval)/par$dg.maxval)$y),color='purple4',lwd=2) # +    coord_cartesian(xlim=c(0,1000),ylim=c(0,1.4))
+        
+        return(p2)
+        p3 = ggplot(temp3b,aes(x=n+par$window/2,y=(smooth.spline(temp3b[,sigmawant])$y-par$dg.minval)/par$dg.maxval,group=af(m),color=af(m))) +
+          geom_line(aes(color=af(m)),lwd=1) +
+          theme_bw() + theme(panel.grid=element_blank()) +
+          ylab('Energy (kcal/mol)') + xlab("Nucleotides in R-loop") + annotate(geom='segment',x=0,xend=10000,y=0.5,yend=0.5,lty=2)
+        
+      }
+    }
+  }
+  return(p2)
+  #grid.arrange(p2)# +       coord_cartesian(xlim=c(par$window,000),ylim=c(0,1.4)))#,p3)
+  #p2 = ggplot(temp3,aes(x = n,dgmin07)) +
+  #  geom_line(color='purple4')
+  #print(p2)
+}
+```
+
+```{r}
+temp3 = dg.all[dg.all$seqtype == 'T7_init_VR_20',]
+temp3b = temp3b[temp3b$m >= 200 & temp3b$m <= 400,]
+temp3b = temp3b[temp3b$m %% 50 == 0,]
+ggplot(temp3b,aes(x=n+292+par$window/2,y=(temp3b$dgmin07-par$dg.minval)/par$dg.maxval)) +
+  geom_line(aes(color=af(m)),lwd=1)
+
+
+
+```
+
+```{r}
+pdf("seqtype_vs_juncEs_CpGprof.pdf",width=30,height=30)
+mwant = 200
+for (i in 1:length(juncEs)) {
+  temp3 = dg.all.m #temp3 = dg.all[dg.all$seqtype == myseqtype,]
+  temp3[temp3$m == 0,] = temp3[temp3$m == 0,] + 10
+  temp3[temp3$m != 0,] = temp3[temp3$m != 0,] + a
+  
+  temp4 = dfseq.all #temp4 = dfseq.all[dfseq.all$seqtype == myseqtype,]
+  temp3b = temp3
+  p = ggplot(temp4,aes(x = temp4$i0+par$window/2,temp4$CGdens)) +
+    geom_line(aes(y=smooth.spline(CGdens,spar=0.2)$y),color='cornflowerblue') +
+    geom_line(aes(y=smooth.spline(GCcont,spar=0.2)$y),color='green4') +
+    geom_line(aes(y=smooth.spline(GCskew+0.5,spar=0.2)$y),color='red4') +
+    ggtitle(paste(myseqtype,sigma,m)) +
+    theme_bw() + theme(panel.grid=element_blank()) +
+    annotate(geom='rect',xmin=587-292,xmax=605-292,ymin=-10,ymax=10,fill='black',alpha=0.1,color=NA) +
+    annotate(geom='rect',xmin=641-292,xmax=841-292,ymin=-10,ymax=10,fill='green4',alpha=0.1,color=NA) +
+    annotate(geom='rect',xmin=842-292,xmax=1317-292,ymin=-10,ymax=10,fill='orange2',alpha=0.1,color=NA) +
+    facet_grid(.~seqtype) +
+    ylab('Energy (kcal/mol)') + xlab("Nucleotides in R-loop") + annotate(geom='segment',x=0,xend=10000,y=0.5,yend=0.5,lty=2)
+  
+  if (defined(temp3b[temp3b$m == mwant,])) {
+    temp3b = temp3b[temp3b$m == mwant,]
+    p2 = p + geom_line(data=temp3b,aes(x=n+par$window/2,y=smooth.spline((temp3b[,sigmawant]-par$dg.minval)/par$dg.maxval)$y),color='purple4',lwd=2) +    coord_cartesian(xlim=c(0,4000),ylim=c(0,1.4))
+    print(p2)
+  }
+  
+  # p2 = plot.this(dfseq.all,dg.all,window=200,sigma=-0.07,myseqtype=seqtype,m=200,par=par,a=juncEs[i])
+  # print(p2 + coord_cartesian(xlim=c(0,4000),ylim=c(0,1.4)))
+}
+dev.off()
+# plot.this(dfseq.all,dg.all,window=200,sigma=-0.07,myseqtype='seqT',m=200,par=par)
+# 
+# plot.this(dfseq.all,dg.all,window=200,sigma=-0.07,myseqtype='seqok',m=200,par=par)
+# 
+# 
+# 
+# plot.this(dfseq.all,dg.all,window=200,sigma=-0.07,myseqtype='T7_init_VR_20',m=200,par=par)
+# 
+# plot.this(dfseq.all,dg.all,window=200,sigma=-0.07,myseqtype='seqgood',m=200,par=par)
+# 
+# plot.this(dfseq.all,dg.all,window=200,sigma=-0.07,myseqtype='seqG',m=200,par=par)
+
+```
+
+```{r}
+plot.this(dfseq.all,dg.all,window=200,sigma=-0.14,myseqtype='seqT',m=200,par=par)
+
+plot.this(dfseq.all,dg.all,window=200,sigma=-0.14,myseqtype='seqok',m=200,par=par)
+
+
+plot.this(dfseq.all,dg.all,window=200,sigma=-0.14,myseqtype='T7_init_VR_10',m=200,par=par)
+
+plot.this(dfseq.all,dg.all,window=200,sigma=-0.14,myseqtype='T7_init_VR_20',m=200,par=par)
+
+plot.this(dfseq.all,dg.all,window=200,sigma=-0.14,myseqtype='seqgood',m=200,par=par)
+
+plot.this(dfseq.all,dg.all,window=200,sigma=-0.14,myseqtype='seqG',m=200,par=par)
+
+```
+
+
+
+```{r}
+plot.this(dfseq.all,dg.all,window=200,sigma=-0.07,myseqtype='seqT',m=200,m1=400,par=par)
+
+plot.this(dfseq.all,dg.all,window=200,sigma=-0.07,myseqtype='seqok',m=200,m1=400,par=par)
+
+
+plot.this(dfseq.all,dg.all,window=200,sigma=-0.07,myseqtype='T7_init_VR_10',m=200,m1=400,par=par)
+
+plot.this(dfseq.all,dg.all,window=200,sigma=-0.07,myseqtype='T7_init_VR_20',m=200,m1=400,par=par)
+
+plot.this(dfseq.all,dg.all,window=200,sigma=-0.07,myseqtype='seqgood',m=200,m1=400,par=par)
+
+plot.this(dfseq.all,dg.all,window=200,sigma=-0.07,myseqtype='seqG',m=200,m1=400,par=par)
+
+```
+
+```{r}
+plot.this(dfseq.all,dg.all,window=200,sigma=-0.14,myseqtype='seqT',m=200,m1=400,par=par)
+
+plot.this(dfseq.all,dg.all,window=200,sigma=-0.14,myseqtype='seqok',m=200,m1=400,par=par)
+
+
+plot.this(dfseq.all,dg.all,window=200,sigma=-0.14,myseqtype='T7_init_VR_10',m=200,m1=400,par=par)
+
+plot.this(dfseq.all,dg.all,window=200,sigma=-0.14,myseqtype='T7_init_VR_20',m=200,m1=400,par=par)
+
+plot.this(dfseq.all,dg.all,window=200,sigma=-0.14,myseqtype='seqgood',m=200,m1=400,par=par)
+
+plot.this(dfseq.all,dg.all,window=200,sigma=-0.14,myseqtype='seqG',m=200,m1=400,par=par)
+
+```
+
+```{r}
+
+plot.this(dfseq.all,dg.all,window=200,sigma= 0   ,myseqtype='T7_init_VR_10',m=200,m1=400,par=par)
+plot.this(dfseq.all,dg.all,window=200,sigma= 0   ,myseqtype='T7_init_VR_20',m=200,m1=400,par=par)
+plot.this(dfseq.all,dg.all,window=200,sigma=-0.07,myseqtype='T7_init_VR_10',m=200,m1=400,par=par)
+plot.this(dfseq.all,dg.all,window=200,sigma=-0.07,myseqtype='T7_init_VR_20',m=200,m1=400,par=par)
+plot.this(dfseq.all,dg.all,window=200,sigma=-0.14,myseqtype='T7_init_VR_10',m=200,m1=400,par=par)
+plot.this(dfseq.all,dg.all,window=200,sigma=-0.14,myseqtype='T7_init_VR_20',m=200,m1=400,par=par)
+
+
+```
+
+```{r}
+dg.calc_prob = function(dfseq.all,dg.all,window=200,sigma,myseqtype,m) {
+
+temp4 = dfseq.all[dfseq.all$i0 <= 2000 & dfseq.all$seqtype == myseqtype,]
+temp3 = dg.all[dg.all$seqtype == myseqtype & dg.all$m == 200,]
+exp(-1*dg.seq2c.200$dgmin00/(R*T))/sum(exp(-1*dg.seq2c.200$dgmin00/(R*T)))
+}
+# # # # 
+# # # # pdf("Fig1.pdf")
+# # # # ggplot(temp,aes(m,value)) +
+# # # #   geom_line(aes(color=af(variable))) + theme_bw() +
+# # # #   facet_grid(af(n)~seqtype)
+# # # # ggplot(temp,aes(m,value)) +
+# # # #   geom_line(aes(color=af(seqtype))) + theme_bw() +
+# # # #   facet_grid(af(n)~variable)
+# # # # dev.off()
+# # # # 
+# # # # 
+# # # 
+# # # for (i in 1:length(myseqs)) {
+# # #   par$window = 200
+# # #   seq1 = myseqs[i]
+# # #   N1   = nchar(seq1)
+# # #   seqtype = seqtypes[i]
+# # #   fileInd = i
+# # #   
+# # #   dgseq
+# # #   file = pasta(seqtype,'_',par$window,'_.RDS')
+# # #   dfseq = dfseq
+# # # }
+# # # lay(4)
+# # # reset()
+# # # val.all = dg.seq1.200[dg.seq1.200$m == 200,]$dgmin07[1:1200]
+# # # val.all[is.na(val.all)] = 0
+# # # plot(NA,xlim=c(0,1200),ylim=c(min(val.all),max(val.all)))
+# # # lines(dg.seq1.200[dg.seq1.200$m == 200,]$dgmin07[1:1200],col='red',lwd=2)
+# # # lines(dg.seq2a.200[dg.seq2a.200$m == 200,]$dgmin07[1:1200],col='purple4',lwd=2)
+# # # lines(dg.seq3a.200[dg.seq3a.200$m == 200,]$dgmin07[1:1200],col='orange',lwd=2)
+# # # lines(dg.seq2b.200[dg.seq2b.200$m == 200,]$dgmin07[1:1200],col='green4',lwd=2)
+# # # lines(dg.seq3b.200[dg.seq3b.200$m == 200,]$dgmin07[1:1200],col='cornflowerblue',lwd=2)
+# # # segments(0,0,N1,0,lty=2)
+# # # plot(NA,xlim=c(0,1200),ylim=c(min(val.all),max(val.all)))
+# # # lines(dg.seq2c.200[dg.seq2c.200$m == 200,]$dgmin07[1:1200],col='blue1',lwd=2)
+# # # lines(dg.seq3c.200[dg.seq3c.200$m == 200,]$dgmin07[1:1200],col='blue2',lwd=2)
+# # # lines(dg.seq2d.200[dg.seq2d.200$m == 200,]$dgmin07[1:1200],col='blue3',lwd=2)
+# # # lines(dg.seq3d.200[dg.seq3d.200$m == 200,]$dgmin07[1:1200],col='blue4',lwd=2)
+# # # lines(dg.seq2e.200[dg.seq2e.200$m == 200,]$dgmin07[1:1200],col='purple1',lwd=2)
+# # # lines(dg.seq3e.200[dg.seq3e.200$m == 200,]$dgmin07[1:1200],col='purple2',lwd=2)
+# # # segments(0,0,N1,0,lty=2)
+# # # 
+# # 
+# # for (i in 1:length(myseqs)) {
+# #   seq1 = myseqs[i]
+# #   seqtype = seqtypes[i]
+# #   par$window = 200
+# #   print('fa.get_chunk')
+# #   dfseq1 = fa.get_chunk(myseqs[1],window=par$window);size(dfseq1);dfseq1$i0 = dfseq1$i0 + par$window/2
+# # }
+# # dfseq1 = fa.get_chunk(myseqs[1],window=par$window);size(dfseq1);dfseq1$i0 = dfseq1$i0 + par$window/2
+# # dfseq2a = fa.get_chunk(myseqs[2],window=par$window);size(dfseq2a);dfseq2a$i0 = dfseq2a$i0 + par$window/2
+# # dfseq3a = fa.get_chunk(myseqs[3],window=par$window);size(dfseq3a);dfseq3a$i0 = dfseq3a$i0 + par$window/2
+# # dfseq2b = fa.get_chunk(myseqs[4],window=par$window);size(dfseq2b);dfseq2b$i0 = dfseq2b$i0 + par$window/2
+# # dfseq3b = fa.get_chunk(myseqs[5],window=par$window);size(dfseq3b);dfseq3b$i0 = dfseq3b$i0 + par$window/2
+# # dfseq2c = fa.get_chunk(myseqs[6],window=par$window);size(dfseq2c);dfseq2c$i0 = dfseq2c$i0 + par$window/2
+# # dfseq3c = fa.get_chunk(myseqs[7],window=par$window);size(dfseq3c);dfseq3c$i0 = dfseq3c$i0 + par$window/2
+# # dfseq2d = fa.get_chunk(myseqs[8],window=par$window);size(dfseq2d);dfseq2d$i0 = dfseq2d$i0 + par$window/2
+# # dfseq3d = fa.get_chunk(myseqs[9],window=par$window);size(dfseq3d);dfseq3d$i0 = dfseq3d$i0 + par$window/2
+# # dfseq2e = fa.get_chunk(myseqs[10],window=par$window);size(dfseq2e);dfseq2e$i0 = dfseq2e$i0 + par$window/2
+# # dfseq3e = fa.get_chunk(myseqs[11],window=par$window);size(dfseq3e);dfseq3e$i0 = dfseq3e$i0 + par$window/2
+# # lay(n1=4,n2=3)
+# # plotthis(dfseq1[dfseq1$i0 <= 1500,],dg.seq1.200[dg.seq1.200$m == 1000,],window=200)
+# # plotthis(dfseq2a[dfseq2a$i0 <= 1500,],dg.seq2a.200[dg.seq2a.200$m == 1000,],window=200)
+# # plotthis(dfseq3a[dfseq3a$i0 <= 1500,],dg.seq3a.200[dg.seq3a.200$m == 1000,],window=200)
+# # plotthis(dfseq2b[dfseq2b$i0 <= 1500,],dg.seq2b.200[dg.seq2b.200$m == 1000,],window=200)
+# # plotthis(dfseq3b[dfseq3b$i0 <= 1500,],dg.seq3b.200[dg.seq3b.200$m == 1000,],window=200)
+# # plotthis(dfseq2c[dfseq2c$i0 <= 1500,],dg.seq2c.200[dg.seq2c.200$m == 1000,],window=200)
+# # plotthis(dfseq3c[dfseq3c$i0 <= 1500,],dg.seq3c.200[dg.seq3c.200$m == 1000,],window=200)
+# # plotthis(dfseq2d[dfseq2d$i0 <= 1500,],dg.seq2d.200[dg.seq2d.200$m == 1000,],window=200)
+# # plotthis(dfseq3d[dfseq3d$i0 <= 1500,],dg.seq3d.200[dg.seq3d.200$m == 1000,],window=200)
+# # plotthis(dfseq2e[dfseq2e$i0 <= 1500,],dg.seq2e.200[dg.seq2e.200$m == 1000,],window=200)
+# # plotthis(dfseq3e[dfseq3e$i0 <= 1500,],dg.seq3e.200[dg.seq3e.200$m == 1000,],window=200)
+# # # 
+# # nom = e^(-1*dgm1.n/(R*T))
+# # denom = e^(-1*dgm1.all/(R*T))
+# dg.seq1.200$probmin00 = exp(-1*dg.seq1.200$dgmin00/(R*T))/sum(exp(-1*dg.seq1.200$dgmin00/(R*T)))
+# dg.seq1.200$probmin07 = exp(-1*dg.seq1.200$dgmin07/(R*T))/sum(exp(-1*dg.seq1.200$dgmin07/(R*T)))
+# dg.seq1.200$probmin14 = exp(-1*dg.seq1.200$dgmin14/(R*T))/sum(exp(-1*dg.seq1.200$dgmin14/(R*T)))
+# 
+# dg.seq2a.200$probmin00 = exp(-1*dg.seq2a.200$dgmin00/(R*T))/sum(exp(-1*dg.seq2a.200$dgmin00/(R*T)))
+# dg.seq2a.200$probmin07 = exp(-1*dg.seq2a.200$dgmin07/(R*T))/sum(exp(-1*dg.seq2a.200$dgmin07/(R*T)))
+# dg.seq2a.200$probmin14 = exp(-1*dg.seq2a.200$dgmin14/(R*T))/sum(exp(-1*dg.seq2a.200$dgmin14/(R*T)))
+# dg.seq3a.200$probmin00 = exp(-1*dg.seq3a.200$dgmin00/(R*T))/sum(exp(-1*dg.seq3a.200$dgmin00/(R*T)))
+# dg.seq3a.200$probmin07 = exp(-1*dg.seq3a.200$dgmin07/(R*T))/sum(exp(-1*dg.seq3a.200$dgmin07/(R*T)))
+# dg.seq3a.200$probmin14 = exp(-1*dg.seq3a.200$dgmin14/(R*T))/sum(exp(-1*dg.seq3a.200$dgmin14/(R*T)))
+# 
+# dg.seq2b.200$probmin00 = exp(-1*dg.seq2b.200$dgmin00/(R*T))/sum(exp(-1*dg.seq2b.200$dgmin00/(R*T)))
+# dg.seq2b.200$probmin07 = exp(-1*dg.seq2b.200$dgmin07/(R*T))/sum(exp(-1*dg.seq2b.200$dgmin07/(R*T)))
+# dg.seq2b.200$probmin14 = exp(-1*dg.seq2b.200$dgmin14/(R*T))/sum(exp(-1*dg.seq2b.200$dgmin14/(R*T)))
+# dg.seq3b.200$probmin00 = exp(-1*dg.seq3b.200$dgmin00/(R*T))/sum(exp(-1*dg.seq3b.200$dgmin00/(R*T)))
+# dg.seq3b.200$probmin07 = exp(-1*dg.seq3b.200$dgmin07/(R*T))/sum(exp(-1*dg.seq3b.200$dgmin07/(R*T)))
+# dg.seq3b.200$probmin14 = exp(-1*dg.seq3b.200$dgmin14/(R*T))/sum(exp(-1*dg.seq3b.200$dgmin14/(R*T)))
+# 
+# dg.seq2c.200$probmin00 = exp(-1*dg.seq2c.200$dgmin00/(R*T))/sum(exp(-1*dg.seq2c.200$dgmin00/(R*T)))
+# dg.seq2c.200$probmin07 = exp(-1*dg.seq2c.200$dgmin07/(R*T))/sum(exp(-1*dg.seq2c.200$dgmin07/(R*T)))
+# dg.seq2c.200$probmin14 = exp(-1*dg.seq2c.200$dgmin14/(R*T))/sum(exp(-1*dg.seq2c.200$dgmin14/(R*T)))
+# dg.seq3c.200$probmin00 = exp(-1*dg.seq3c.200$dgmin00/(R*T))/sum(exp(-1*dg.seq3c.200$dgmin00/(R*T)))
+# dg.seq3c.200$probmin07 = exp(-1*dg.seq3c.200$dgmin07/(R*T))/sum(exp(-1*dg.seq3c.200$dgmin07/(R*T)))
+# dg.seq3c.200$probmin14 = exp(-1*dg.seq3c.200$dgmin14/(R*T))/sum(exp(-1*dg.seq3c.200$dgmin14/(R*T)))
+# 
+# dg.seq2d.200$probmin00 = exp(-1*dg.seq2d.200$dgmin00/(R*T))/sum(exp(-1*dg.seq2d.200$dgmin00/(R*T)))
+# dg.seq2d.200$probmin07 = exp(-1*dg.seq2d.200$dgmin07/(R*T))/sum(exp(-1*dg.seq2d.200$dgmin07/(R*T)))
+# dg.seq2d.200$probmin14 = exp(-1*dg.seq2d.200$dgmin14/(R*T))/sum(exp(-1*dg.seq2d.200$dgmin14/(R*T)))
+# dg.seq3d.200$probmin00 = exp(-1*dg.seq3d.200$dgmin00/(R*T))/sum(exp(-1*dg.seq3d.200$dgmin00/(R*T)))
+# dg.seq3d.200$probmin07 = exp(-1*dg.seq3d.200$dgmin07/(R*T))/sum(exp(-1*dg.seq3d.200$dgmin07/(R*T)))
+# dg.seq3d.200$probmin14 = exp(-1*dg.seq3d.200$dgmin14/(R*T))/sum(exp(-1*dg.seq3d.200$dgmin14/(R*T)))
+# 
+# dg.seq2e.200$probmin00 = exp(-1*dg.seq2e.200$dgmin00/(R*T))/sum(exp(-1*dg.seq2e.200$dgmin00/(R*T)))
+# dg.seq2e.200$probmin07 = exp(-1*dg.seq2e.200$dgmin07/(R*T))/sum(exp(-1*dg.seq2e.200$dgmin07/(R*T)))
+# dg.seq2e.200$probmin14 = exp(-1*dg.seq2e.200$dgmin14/(R*T))/sum(exp(-1*dg.seq2e.200$dgmin14/(R*T)))
+# dg.seq3e.200$probmin00 = exp(-1*dg.seq3e.200$dgmin00/(R*T))/sum(exp(-1*dg.seq3e.200$dgmin00/(R*T)))
+# dg.seq3e.200$probmin07 = exp(-1*dg.seq3e.200$dgmin07/(R*T))/sum(exp(-1*dg.seq3e.200$dgmin07/(R*T)))
+# dg.seq3e.200$probmin14 = exp(-1*dg.seq3e.200$dgmin14/(R*T))/sum(exp(-1*dg.seq3e.200$dgmin14/(R*T)))
+
+#dg.all = dg.all1[dg.all1$n == 1,]$RD.min.DD
+```
