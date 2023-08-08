@@ -1,10 +1,11 @@
-source("lib/tri_lib.R")
+source("lib/tri.lib.main.R")
 #CLUSTFILES, PEAKFILES, BEDFILES, FASTAFILES, 
 #CLUSTS, PEAKS, BEDS, FASTAS
 #slice_df
 #gp.lib
 
-head(PEAKS)
+head(PEAKS
+     )
 my.par$treats
 my.par$genes
 my.par$thres
@@ -33,7 +34,7 @@ gp$GCprof.window = 50
 
 #gp$C.transform = TRUE
 gp$use_clusterFile= 'resources/dfclustVR20.RDS'
-my.VR = 20
+#my.VR = 5
 dfd.beg3 = data.frame()
 dfd.end3 = data.frame()
 for (my.VR in seq(1,31)) {
@@ -134,22 +135,6 @@ for (my.VR in seq(1,31)) {
   df$begcluster = 0
   df$endcluster = 0 
   
-  res = tryCatch({
-    bytemp = 'beg'
-    dfd.beg = df.get_density(df,by=bytemp,gp,my.CpGprof)
-    dfd.beg2 = merge(df,subset(dfd.beg,select=c(-index,-nuc)),by=c(bytemp))
-    dfd.beg2 = get_cor(df,dfd.beg2,bytemp,my.params,gp=gp)
-    dfd.beg3 = rbind(dfd.beg3,dfd.beg2)
-    bytemp = 'end'
-    df = df[order(df[,bytemp]),]
-    dfd.end = df.get_density(df,by=bytemp,gp,my.CpGprof)
-    dfd.end2 = merge(df,subset(dfd.end,select=c(-index,-nuc)),by=c(bytemp))
-    dfd.end2 = get_cor(df,dfd.end2,bytemp,my.params,gp=gp)
-    dfd.end3 = rbind(dfd.end3,dfd.end2)
-  },
-  error = function(cond) {
-    return(invisible(NA))
-  })
   #df.get_density
   
     # dfd$beg.dens = 
@@ -223,6 +208,25 @@ for (my.VR in seq(1,31)) {
     #grid.arrange(p1.CpGprof,arrangeGrob(p1.xy,p1.beg.orig,p1.beg.clust),arrangeGrob(p1.xy,p1.end.orig,p1.end.clust),nrow=3,heights=c(1,3,3))
     dev.off()
   })
+  
+  res = tryCatch({
+    bytemp = 'beg'
+    df = df[order(df[,bytemp]),]
+    dfd.beg = df.get_density(df,by=bytemp,gp,my.CpGprof)
+    dfd.beg2 = merge(df,subset(dfd.beg,select=c(-index,-nuc)),by=c(bytemp))
+    dfd.beg2b = get_cor(df,dfd.beg2,bytemp,my.params,gp=gp)
+    dfd.beg3 = rbind(dfd.beg3,dfd.beg2b)
+    bytemp = 'end'
+    df = df[order(df[,bytemp]),]
+    dfd.end = df.get_density(df,by=bytemp,gp,my.CpGprof)
+    dfd.end2 = merge(df,subset(dfd.end,select=c(-index,-nuc)),by=c(bytemp))
+    dfd.end2b = get_cor(df,dfd.end2,bytemp,my.params,gp=gp)
+    dfd.end3 = rbind(dfd.end3,dfd.end2)
+  },
+  error = function(cond) {
+    
+  })
+  
   next
 
   
@@ -761,6 +765,7 @@ for (my.VR in seq(1,31)) {
   # pdf('VR17_p2.pdf',height=10,width=10)
   # grid.arrange(p2.meanbeg.c.my.df,p2.meanend.c.my.df,nrow=2,ncol=2)
   # dev.off()
+  
   
   if (my.VR == 1) {
     my.perc = data.frame()
