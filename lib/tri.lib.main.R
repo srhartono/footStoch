@@ -257,19 +257,54 @@ parseMAINFile = function(gp,debug=F,verbose=F) {
   BEDS  = data.frame()
   
   for (file in BEDFILES) {
-    BEDS   = rbind(BEDS,parseBEDFile(file))
+    CURR.BEDS = parseBEDFile(file)
+    CURR.BEDS$file = file
+    if (grepl('invivo.bed',file)) {
+      begorig = CURR.BEDS$beg
+      # begcurr = CURR.BEDS$beg - 10
+      # endcurr = CURR.BEDS$end + 10
+      # 
+      # CURR.BEDS$beg = begcurr - begorig
+      # CURR.BEDS$end = endcurr - begorig
+
+      CURR.BEDS$beg = (CURR.BEDS$beg - begorig + 2000) #-10 + 2000 = 1990
+      CURR.BEDS$end = (CURR.BEDS$end - begorig + 2000) #2010 + 2000 = 4010
+      CURR.BEDS$chr = CURR.BEDS$feature
+      CURR.BEDS$gene = CURR.BEDS$feature
+      CURR.BEDS.FW = CURR.BEDS
+      CURR.BEDS.RV = CURR.BEDS
+      CURR.BEDS.FW$end = CURR.BEDS.FW$beg + 30
+      CURR.BEDS.RV$beg = CURR.BEDS.RV$end - 30
+      CURR.BEDS.FW$feature = "FW_Primer"
+      CURR.BEDS.RV$feature = "RV_Primer"
+      CURR.BEDS = rbind(CURR.BEDS.FW,CURR.BEDS.RV)
+      CURR.BEDS = CURR.BEDS[order(CURR.BEDS$chr,CURR.BEDS$beg,CURR.BEDS$end),]
+    } else if (grepl('invivo_exon.bed',file)) {
+      CURR.BEDS$beg = (CURR.BEDS$beg) + (2000) # 78 + 2000 = 2078
+      CURR.BEDS$end = (CURR.BEDS$end) + (2000)
+      CURR.BEDS$chr = CURR.BEDS$feature
+      CURR.BEDS$gene = CURR.BEDS$feature
+      CURR.BEDS$feature = "Exon"
+      CURR.BEDS = CURR.BEDS[order(CURR.BEDS$chr,CURR.BEDS$beg,CURR.BEDS$end),]
+    }
+    BEDS   = rbind(BEDS,CURR.BEDS)
   }
+  BEDS.FW = subset(BEDS[BEDS$feature == "FW_Primer",],select=-end)
+  BEDS.RV = subset(BEDS[BEDS$feature == "RV_Primer",],select=c('chr','end'))
+  BEDS.FW$feature = "Amplicon"
+  BEDS.FW = merge(BEDS.FW,BEDS.RV,by='chr')
+  BEDS = rbind(BEDS,BEDS.FW)
+  BEDS = BEDS[BEDS$chr != "RPPH1",]
+  BEDS = BEDS[order(BEDS$chr,BEDS$beg,BEDS$end),]
   
   if (debug == T) {
 
-    expected = 'b8978ebf63df566c3cdcf064871119f6'
+    expected = '83b20bb3d808ea5f32a90ed16a4c7905 '
     todebug    = digest(BEDS)
     debug_df(expected=expected,todebug=todebug,type="BEDS",my.data=BEDS,verbose=T)
   }
   # Parse FASTAS
   FASTAS  = data.frame()
-  
-  BIGFASTAS = parseFASTAFile('resources/bigfa/230424_fasta.fa')
   
   for (file in FASTAFILES) {
 
@@ -277,13 +312,58 @@ parseMAINFile = function(gp,debug=F,verbose=F) {
   }
   if (debug == T) {
 
-    expected = '61edd075305195026718a373e0a3db7e'
+    expected = 'ed32b8d93bc599aa11de3003dd1e01d3'
     todebug    = digest(FASTAS)
     debug_df(expected=expected,todebug=todebug,type="FASTAS",my.data=FASTAS,verbose=T)
-  }  
-  my.list=list(PEAKS=PEAKS,BEDS=BEDS,FASTAS=FASTAS,CLUST=CLUSTS,BIGFASTA = BIGFASTAS)
+  }
+  
+ # Parse BIGFASTAS
+  BIGFASTAS  = data.frame()
+ 
+  for (file in BIGFASTAFILES) {
+
+    BIGFASTAS   = rbind(BIGFASTAS,parseFASTAFile(file))
+  }
+  if (debug == T) {
+
+    expected = 'dab2095bdbbd4d63ce7428724435644f'
+    todebug    = digest(BIGFASTAS)
+    debug_df(expected=expected,todebug=todebug,type="BIGFASTAS",my.data=BIGFASTAS,verbose=T)
+  }
+  
+  BIGFASTAS = BIGFASTAS[,-1]
+  colnames(FASTAS)[3] = 'seq.amp'
+  FASTAS = merge(BIGFASTAS,FASTAS,by='gene')
+  FASTAS = subset(FASTAS,select=c('chr','gene','seq','seq.amp'))
+  if (debug == T) {
+
+    expected = '470c8ca5e36cc56114827887c3adedcc'
+    todebug    = digest(FASTAS)
+    debug_df(expected=expected,todebug=todebug,type="FASTAS",my.data=FASTAS,verbose=T)
+  }
+  
+  FASTAS = merge(FASTAS,subset(BEDS[BEDS$feature == 'Amplicon',],select=-gene),by='chr')
+  FASTAS[FASTAS$feature == "Amplicon",]$beg = FASTAS[FASTAS$feature == "Amplicon",]$beg - 10
+  FASTAS[FASTAS$feature == "Amplicon",]$end = FASTAS[FASTAS$feature == "Amplicon",]$end + 10
+  
+  # sanity chekc
+  FASTAS[!FASTAS$gene %in% BIGFASTAS$gene,]$gene
+  BIGFASTAS[!BIGFASTAS$gene %in% FASTAS$gene,]$gene
+  (BEDS[!BEDS$gene %in% FASTAS$gene,]$gene)
+  (FASTAS[!FASTAS$gene %in% BEDS$gene,]$gene)
+
+  #sanity check
+  test1 = FASTAS
+  test1$len = test1$end - test1$beg
+  test1$seq.len = nchar(test1$seq)
+  test1$seq.amp.len = nchar(test1$seq.amp)
+  test1 = subset(test1,select=c(-seq,-seq.amp))
+  size(test1[test1$len != test1$seq.amp.len,])
+
+  my.list=list(PEAKS=PEAKS,BEDS=BEDS,FASTAS=FASTAS,CLUST=CLUSTS)
   return(my.list)
 }
+
 
 get_title = function(my.title='',my.params=list(),verbose=F,debug=F) {
   
@@ -978,6 +1058,7 @@ CLUSTFILES  = my.order(paste('resources/misc/',dir("./resources/misc/","*final*.
 PEAKFILES  = my.order(paste('resources/peaks/',dir("./resources/peaks/","*.BED"),sep=''))
 BEDFILES   = my.order(paste('resources/bed/',dir("./resources/bed/","*.bed$"),sep=''))
 FASTAFILES = my.order(paste('resources/fa/',dir("./resources/fa/","*.fa"),sep=''))
+BIGFASTAFILES = my.order(paste('resources/bigfa/',dir("./resources/bigfa/","bigfa.fa"),sep=''))
 
 #parseBEDFile(debug=T)
 #parsePEAKFile(debug=T)
@@ -990,11 +1071,7 @@ CLUSTS  = MAIN$CLUST
 BEDS    = MAIN$BED
 PEAKS   = MAIN$PEAK
 FASTAS  = MAIN$FASTA
-BIGFASTAS = MAIN$BIGFASTA
-BIGFASTAS = rbind(BIGFASTAS,FASTAS[!FASTAS$gene %in% BIGFASTAS$gene,])
-FASTAS2 = subset(FASTAS,select=c('gene','seq'));colnames(FASTAS2)[2] = 'seq.amp'
-FASTAS2 = merge(BIGFASTAS,FASTAS2,by='gene')
-BIGFASTAS = FASTAS2
+
 
 my.par = list(
   'genes'=my.order(unique(PEAKS$gene)),

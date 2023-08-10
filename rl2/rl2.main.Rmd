@@ -4,8 +4,8 @@ source('lib/rl2.lib9.R')
 source('lib/rl2.lib1.R')
 source('../lib/tri.lib.misc.R')
 
-B = file.parse_deltaG()
-Bprint = subset(B[B$type == 'RD.min.DD',],select=c(chunk,B))
+#B = file.parse_deltaG()
+#Bprint = subset(B[B$type == 'RD.min.DD',],select=c(chunk,B))
 par = list(
   a = 10,
   π = pi,
@@ -17,7 +17,7 @@ par = list(
 )
 par$K = (2200 * par$R * par$T) / par$N
 par$n = seq(1,3000)
-par$len = seq(0,1000)
+par$len = seq(0,10000)
 par$sigmas = c(0,-0.07,-0.14)
 
 # seqgood = join(rep('G',100))
@@ -194,42 +194,48 @@ seqr.3c.CpGprof = fa.get_CpGprof(seqr$seq$seq3c,gp=gp,print=TRUE)
 
 ```{r}
 
-# FASTAS.rl2 = BIGFASTAS
-# FASTAS.rl2[grep('pFC53',FASTAS.rl2$gene),]$seq = sapply(FASTAS.rl2[grep('pFC53',FASTAS.rl2$gene),]$seq,revcomp)
-# FASTAS.rl2[grep('pFC53',FASTAS.rl2$gene),]$seq.amp = sapply(FASTAS.rl2[grep('pFC53',FASTAS.rl2$gene),]$seq.amp,revcomp)
+# FASTAS.rl2 = FASTAS
+# FASTAS.rl2[FASTAS.rl2$strand == '-',]$seq = sapply(FASTAS.rl2[FASTAS.rl2$strand == '-',]$seq, revcomp)
+# FASTAS.rl2[FASTAS.rl2$strand == '-',]$seq.amp = sapply(FASTAS.rl2[FASTAS.rl2$strand == '-',]$seq.amp, revcomp)
 # FASTAS.rl2$type = 'invivo'
-# FASTAS.rl2[grep('pFC|T7',FASTAS.rl2$gene,ignore.case = TRUE),]$type = 'invitro'
+# FASTAS.rl2[grep('invivo',FASTAS.rl2$file,invert=T),]$type = 'invitro'
 # FASTAS.rl2 = FASTAS.rl2[order(FASTAS.rl2$type,FASTAS.rl2$gene),]
 # saveRDS(FASTAS.rl2,'resources/FASTAS.rl2.RDS')
 FASTAS.rl2 = readRDS('resources/FASTAS.rl2.RDS')
+
 seqT = seqr$seq$seqT
 seqG = seqr$seq$seqG
 seqgood = seqr$seq$seqgood
 seqok = seqr$seq$seqok
-# seqVR10 = FASTAS.rl2[FASTAS.rl2$chr == 'T7_init_VR_10',]$seq
-# seqVR20 = FASTAS.rl2[FASTAS.rl2$chr == 'T7_init_VR_20',]$seq
-#seqtypes = c(FASTAS.rl2$gene[c(seq(1,32),65,66,73,80,84,88,93,64,seq(33,63))])
-#seqtypes = c(seqtypes,'seqT','seqG','seqgood','seqok','T7_init_VR_10','T7_init_VR_20')
-#myseqs =   c(FASTAS.rl2$seq[ c(seq(1,32),65,66,73,80,84,88,93,64,seq(33,63))])
-#myseqs =   c(myseqs,seqT,seqG,seqgood,seqok,seqVR10,seqVR20)
+
 len.max = max(par$len)
-seqtypeswant = c("pFC9","T7_init_VR_10","T7_init_VR_20","CALM3","FUS","pFC53_ApaLI","pFC53TVR_10_pair_0_T3TermMix","pFC53TVR_20_pair_0_T3TermMix")
+
+seqtypeswant = c("pFC9","T7_init_VR_10","T7_init_VR_20","T7_init_VR_1","T7_init_VR_4","T7_init_VR_17","T7_init_VR_18","T7_init_VR_21","T7_init_VR_25","T7_init_VR_31","pFC53_ApaLI","pFC53TVR_10_pair_0_T3TermMix","pFC53TVR_20_pair_0_T3TermMix",'CALM3','BTF3','FUS','MRFAP1L1','CNBP')
 
 FASTASwant = FASTAS.rl2[FASTAS.rl2$gene %in% seqtypeswant,]
-circ = pasta(FASTASwant$seq,substr(FASTASwant$seq,1,len.max))
-myseqs = c(FASTASwant$seq,circ,seqT,seqG,seqgood,seqok)
-seqtypes = c(FASTASwant$gene,pasta(FASTASwant$gene,'_circ'),"seqT","seqG","seqgood","seqok")
+myseqs = c(FASTASwant$seq,seqT,seqG)
+seqtypes = c(FASTASwant$gene,"seqT","seqG")
 
 length(seqtypes)
 length(myseqs)
 #myseqs = c(seqVR10,seqVR20,seqT,seqG,seqgood,seqok,seq2a)
 #seqtypes = c('T7_init_VR_10','T7_init_VR_20','seqT','seqG','seqgood','seqok','seq2a')
 #'seqT','seqG','seq1','seq2a','seq3a','seq2b','seq3b','seq2c','seq3c','seq2d','seq3d','seq2e','seq3e')
+
+cons = rl2.get.constants()
+
+par = list(
+  n = seq(1,3000),
+  m = seq(0,10000),
+  sigmas = seq(0,-0.14,by=-0.01),
+  window = 200
+)
+
+#dG = a + sum(B) + B.sigma(n,m,)
+
+B.sigma = B.sigma.precalc(n=par$n,m=par$len,sigma=-0.07,par=par)
+
 B = file.parse_deltaG()
-
-B.sigma = B.precalc(par=par)
-par$window = 200
-
 
 dg.all = data.frame()
 dgseq.all = data.frame()
@@ -250,56 +256,44 @@ for (i in 1:length(myseqs)) {
   print(paste('- rl2.fa.get_chunk',seqtype))
   if (file.exists(file.dfseq)) {
     dfseq1 = readRDS(file.dfseq)
+    #dfseq.all = rbind(dfseq.all,dfseq1)
   } else {
     dfseq1 = rl2.fa.get_chunk(seq1,window=par$window);size(dfseq1);
     #  dfseq1$i0 = dfseq1$i0 #+ par$window/2
     rownames(dfseq1) = dfseq1$i0
+    dfseq1$n = dfseq1$i0
+    dfseq1$fileInd = i
+    dfseq1$seqtype = seqtype
+    dfseq1$n = dfseq1$i0
+    #dfseq.all = rbind(dfseq.all,dfseq1)
     saveRDS(dfseq1,file=file.dfseq)
     print('  -> save')
   }  
   print(paste('- dg.merge',seqtype))
   if (file.exists(file.dgseq)) {
     dgseq1 = readRDS(file.dgseq)
+    #dgseq.all = rbind(dgseq.all,dgseq1)
   } else {
     dgseq1 = subset(dg.merge(B,seq1),select=c(i0,DD,RD,RD.min.DD));size(dgseq1)
-    rownames(dgseq) = dgseq$i0
+    dgseq1$fileInd = i
+    dgseq1$seqtype = seqtype
+    rownames(dgseq1) = dgseq1$i0
+    dgseq1$n = dgseq1$i0
+    #dgseq.all = rbind(dgseq.all,dgseq1)
     saveRDS(dgseq1,file=file.dgseq)
     print('  -> save')
   }
-  # next
-  #file = pasta('resources/',seqtype,'_',par$window,'_.RDS')
-  # if (file.exists(file)) {
-  # #   load(file)
-  #   dgall1$seqtype = seqtype
-  #   dgall1$fileInd = i
-  #   dfseq1$seqtype = seqtype
-  #   dfseq1$fileInd = i
-  #   dgseq1$seqtype = seqtype
-  #   dgseq1$fileInd = i
-  #   dgseq.all = rbind(dgseq.all,dgseq1)
-  #   dfseq.all = rbind(dfseq.all,dfseq1)
-  #   dg.all = rbind(dg.all,dgall1)
-  #   print(paste('- ',file,'exist!'))
-  #   next
-  # } else {
-  #   print(paste('- ',file,'doesnt exist!!!'))
-  # }
-  
-  
+ 
+  seq.len.max = seq(1,nchar(seq1) - len.max)
+
+  mygrid = data.frame(n=1,m=seq(0,nchar(seq1)))
+  mygrid$sumB = apply(mygrid,1,dgb,dgseq=dgseq1$RD.min.DD)
   print(paste('- dg.calc',seqtype))
   if (file.exists(file.dgall)) {
-    dgall1 = readRDS(file.dgall)
-    dgall1$seqtype = seqtype
-    dgall1$fileInd = i
-    dfseq1$seqtype = seqtype
-    dfseq1$fileInd = i
-    dgseq1$seqtype = seqtype
-    dgseq1$fileInd = i
-    dgseq.all = rbind(dgseq.all,dgseq1)
-    dfseq.all = rbind(dfseq.all,dfseq1)
-    dg.all = rbind(dg.all,dgall1)
     print(paste('- ',file,'exist!'))
     next
+    dgall1 = readRDS(file.dgall)
+    #dg.all = rbind(dg.all,dgall1)
   } else {
     next
     seq.len.max = seq(1,nchar(seq1) - len.max)
@@ -315,13 +309,24 @@ for (i in 1:length(myseqs)) {
     dgall1$dgmin00 = dgall1$'0' + dgall1$RD.min.DD
     dgall1$dgmin07 = dgall1$'-0.07' + dgall1$RD.min.DD
     dgall1$dgmin14 = dgall1$'-0.14' + dgall1$RD.min.DD
-    print('  -> save')
+    dgall1$seqtype = seqtype
+    dgall1$fileInd = i
+    #dg.all = rbind(dg.all,dgall1)
     saveRDS(dgall1,file=file.dgall)
+    print('  -> save')
   }
 }
 
-seqwant = c('T7_init_VR_10','T7_init_VR_20','pFC9',
-            'T7_init_VR_10_circ','T7_init_VR_20_circ','pFC9_circ')
+
+```
+
+
+```{r}
+
+#pFC9
+
+# dG final = a + dgall$'0' + dgmin00 + 
+seqwant = c('T7_init_VR_10','T7_init_VR_20','pFC9')
 
 dg.all = data.frame()
 dgseq.all = data.frame()

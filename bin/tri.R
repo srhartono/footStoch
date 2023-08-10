@@ -4,8 +4,7 @@ source("lib/tri.lib.main.R")
 #slice_df
 #gp.lib
 
-head(PEAKS
-     )
+head(PEAKS)
 my.par$treats
 my.par$genes
 my.par$thres

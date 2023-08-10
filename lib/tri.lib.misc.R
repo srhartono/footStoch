@@ -152,10 +152,18 @@ reorder_y = function(df) {
 revcomp = function(x) {
   x = data.frame(seq=split(x,'')[[1]],ind=seq(1,nchar(x)))
   x$seq2 = x$seq
-  x[x$seq == 'A',]$seq2 = 'T'
-  x[x$seq == 'C',]$seq2 = 'G'
-  x[x$seq == 'G',]$seq2 = 'C'
-  x[x$seq == 'T',]$seq2 = 'A'
+  if (defined(  x[x$seq == 'A',])) {
+    x[x$seq == 'A',]$seq2 = 'T'
+  }
+  if (defined(  x[x$seq == 'C',])) {
+    x[x$seq == 'C',]$seq2 = 'G'
+  }
+  if (defined(  x[x$seq == 'G',])) {
+    x[x$seq == 'G',]$seq2 = 'C'
+  }
+  if (defined(  x[x$seq == 'T',])) {
+    x[x$seq == 'T',]$seq2 = 'A'
+  }
   x = join(rev(x$seq2),sep = '')
   return(x)
 }
