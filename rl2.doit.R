@@ -25,15 +25,15 @@ for (plasmid in seqtypeswant) {
   seq.len = nchar(seq1)
   
   start_from = NA
-  # if (grepl('T7_',plasmid)) {
-  #   start_from = 'T7_Promoter'
-  #   strand = '+'
-  # } else if (grepl('(pFC53|T3)',plasmid)) {
-  #   start_from = 'T3_Promoter'
-  #   strand = '-'
-  # } else {
-  #   start_from = NA
-  # }
+  if (grepl('T7_',plasmid)) {
+    start_from = 'T7_Promoter'
+    strand = '+'
+  } else if (grepl('(pFC53|T3)',plasmid)) {
+    start_from = 'T3_Promoter'
+    strand = '-'
+  } else {
+    start_from = NA
+  }
   
   ind = 0
   indtotal = length(G.as) * length(sigmas)
@@ -153,8 +153,8 @@ for (plasmid in seqtypeswant) {
       G[G[,name.prob] != 0, name.plog] = log(G[G[,name.prob] != 0,name.prob],base=10)
       G[G[,name.prob] == 0, name.plog] = log(4.940656e-324, base = 10) 
       
-      G = G[G$n < max(G$n)-500,]
-      my.xmax = max(G$n)-500
+      G = G[G$n < max(G$n)-200,]
+      my.xmax = max(G$n)-200
       my.xmin = 1
       print("Graphing!")
       mwants = c(0,10,50,100,200,400,800,1000)
