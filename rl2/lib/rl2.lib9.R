@@ -21,7 +21,7 @@ sm = summary
 s  = smooth
 ss = smooth.spline
 
-he = function(x,n=6) {return(rbind(head(x,n=n),tail(x,n=n)))}
+h = function(x,n=6) {return(rbind(head(x,n=n),tail(x,n=n)))}
 stretch = function(x,n) {
   x = x[ai(seq(0,n-1)/(n-1) * length(x))]
 }
