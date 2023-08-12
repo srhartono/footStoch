@@ -1,10 +1,11 @@
-flminlen = 50
-nickPos = 1561
-nickJE = -10
+flminlen = 100
+nickPos = 0
+nickLength = 500
 simN = 10000
 seqtypeswant.all = seqtypes
-seqtypeswant = c('T7_init_VR_20')
-sigmas = c(0,-0.01,-0.04,-0.07,-0.14)#,-0.07,-0.14)#,-0.07,-0.14)
+seqtypeswant = c('pFC53_ApaLI')
+seqwant = myseqs[seqtypes == seqtypeswant]
+sigmas = c(0,-0.07,-0.14)#-0.01,-0.02,-0.03,-0.04,-0.07,-0.14)#,-0.07,-0.14)#,-0.07,-0.14)
 G.as = c(0,5,10)
 #sigmas = c(0.00,-0.01,-0.04,-0.07,-0.11,-0.14,-0.17,-0.21)
 snames = gsub('^[ \\-]?0.(.+)$','\\1',ac(format(sigmas,digits=2))); snames
@@ -13,11 +14,26 @@ snames = gsub('^[ \\-]?0.(.+)$','\\1',ac(format(sigmas,digits=2))); snames
 
 #grDevices::cairo_pdf(pasta(plasmid,'.pdf'),width=10,height=10)
 for (plasmid in seqtypeswant) {
-  pdf(pasta(plasmid,'.pdf'),width=10,height=10)
-#  pdf(pasta(plasmid,'.nickat1561.pdf'),width=10,height=10)
+  pdfname = pasta(plasmid,'.pdf')
+  if (nickPos > 0) {
+    pdfname = pasta(plasmid,'.nick',nickPos,'.nickLength',nickLength,'.pdf')
+  }
+  pdf(pdfname,width=10,height=10)
+
   print(paste("Doing plasmid",plasmid))
-  bed = BEDS[BEDS$gene == plasmid,]
-  bed = bed[grep('(Barcode|_diff|Amplicon)',bed$feature,invert=T),]
+  seq1 = myseqs[seqtypes == seqtypeswant]
+  seq.len = nchar(seq1)
+  
+  start_from = NA
+  # if (grepl('T7_',plasmid)) {
+  #   start_from = 'T7_Promoter'
+  #   strand = '+'
+  # } else if (grepl('(pFC53|T3)',plasmid)) {
+  #   start_from = 'T3_Promoter'
+  #   strand = '-'
+  # } else {
+  #   start_from = NA
+  # }
   
   ind = 0
   indtotal = length(G.as) * length(sigmas)
@@ -48,7 +64,15 @@ for (plasmid in seqtypeswant) {
       name.plog = pasta(name,'.plog')
       
       G = G[order(G$n,G$m),]
-      # G = G.a + G.B(i=n:n+m)) + G.S(m,sigma)
+
+  bed = BEDS[BEDS$gene == plasmid,]
+  bed = bed[grep('(Barcode|_diff|Amplicon)',bed$feature,invert=T),]
+  if (strand == '-') {
+    bed.end = max(G$n) - bed$beg
+    bed.beg = max(G$n) - bed$end
+    bed$beg = bed.beg
+    bed$end = bed.end
+  }      # G = G.a + G.B(i=n:n+m)) + G.S(m,sigma)
       # - G.a = G.a[j]
       # - B(n,m) = G.B
       # - G.S = calc.G.a_sigma(sigma,G.a)
@@ -57,8 +81,8 @@ for (plasmid in seqtypeswant) {
 
       G.a_sigma = calc.G_a_sigma(m.max = par$len.max, a = G.a, sigma = sigma, cons = cons, print = F);dim(G.a_sigma)[1]
 
-      # Plot G.a_sigma, don't raelly need this but why not
-      ylimcurr = -1 * 1300
+      # Plot G.a_sigma: G vs rloop length at sigma, don't raelly need this but why not
+      ylimcurr = -1 * 1300 #this is just to make it easy to flip plot
       if (ylimcurr < 0) {ylimmincurr = ylimcurr; ylimmaxcurr = 200} else {ylimmincurr = -200; ylimmaxcurr = ylimcurr}
       p0 = ggplot(G.a_sigma,aes(m, -1 * dg.sigma)) +
         geom_line(aes(m, -1 * dg.sigma)) +
@@ -91,20 +115,28 @@ for (plasmid in seqtypeswant) {
         p0 = p0 + 
             annotate(geom='text',x = 1000,y=-1 * (G.a_sigma[G.a_sigma$m == 0,]$dg.sigma),vjust=1,hjust=1,label='below = forms R-loop',size=3)
         }
-      G.a_sigma = G.a_sigma[order(G.a_sigma$m),]
-      #G$sigma = rep(G.a_sigma$dg.sigma,dim(G)[1]/dim(G.a_sigma)[1])
-      G[,name] = G.B$B + G.a_sigma$dg.sigma;dim(G)[1]
-      h(G)
       
+      G.a_sigma = G.a_sigma[order(G.a_sigma$m),]
+      G[,name]  = G.B$B + G.a_sigma$dg.sigma;dim(G)[1]
+      
+      #sanity check
+      h(G)
       dim(G.B)[1] / dim(G.a_sigma)[1]
       dim(G)[1] / dim(G.a_sigma)[1]
       
-      #G[G$m != 0 & G$n >= nickPos & G.B$n <= nickPos + 500,name] = G[G$m != 0 & G$n >= nickPos & G.B$n <= nickPos + 500,name] - G.a
+      if (nickPos > 0) {
+        G[G$m != 0 & G$n >= nickPos & G$n <= nickPos + nickLength,name] = G[G$m != 0 & G$n >= nickPos & G$n <= nickPos + nickLength,name] - G.a
+      }
       
-      # pos (n) = 1 to plasmid sequence length
+      # pos (n) = 1 to plasmid sequence length-500
       # len (m) = 0 to 2000
       # p(n.i,m.j) = e^(-G[pos.n.i,len.m.j]/RT) / sum(e^(-G[pos.n(1-max.i),len.m(1-max.j)]/RT))
-      G = G[G$n > 587,]
+      if (defined(start_from)) {
+        if (defined(bed[bed$feature == start_from,])) {
+          nstart = bed[bed$feature == start_from,]$beg
+          G = G[G$n > nstart,]
+        }
+      }
       G[,name.top]  = exp(-1 * G[,name]/(cons$R * cons$T)) # G of rloop at n=i, m=j
       G[,name.bot]  = sum(G[,name.top])                    # Sum of all G of rloop at n=(1-max.n), m=(1-max.m)
       G[,name.prob] = G[,name.top]/G[,name.bot]            # Probability of rloop at n=i, m=j
@@ -121,28 +153,27 @@ for (plasmid in seqtypeswant) {
       G[G[,name.prob] != 0, name.plog] = log(G[G[,name.prob] != 0,name.prob],base=10)
       G[G[,name.prob] == 0, name.plog] = log(4.940656e-324, base = 10) 
       
-      testorig = G[G$n < max(G$n)-500,]
+      G = G[G$n < max(G$n)-500,]
       my.xmax = max(G$n)-500
       my.xmin = 1
       print("Graphing!")
       mwants = c(0,10,50,100,200,400,800,1000)
-      temp = testorig[testorig$m %in% mwants,]# & testorig$n < max(G.B$n - 1000),]
-      
-      #print(paste("Doing",a))
+      temp = G[G$m %in% mwants,]
       
       title0.small = gsub(' ','_',title0)
       title0.pdf = pasta(title0.small,'.pdf')
       
       yused = -1 * temp[,name]
       yused.max = max(yused)#max(abs(yused)*0.1) 
+      yused.min = min(temp[temp$m == 0,name])-100
       p.G = ggplot(temp,aes(x=n,y=1)) +
         theme_bw() + theme(panel.grid=element_blank(),legend.position='bottom',legend.box = 'vertical') +
         guides(color = guide_legend(title='R-loop Length',order = 1),fill='none') +
         ggtitle(title0) + ylab('-G (kcal/mol)') + xlab("Pos in plasmid (bp)") +
         geom_line(aes(y=yused,color=af(m))) + 
-        coord_cartesian(xlim=c(1,my.xmax),ylim=c(-500,200)) +
-        geom_rect(data=bed,aes(x=beg,y=0,xmin=beg,xmax=end,ymin=-500,ymax = 200,fill=feature),alpha=0.15,color=NA) +
-        geom_text(data=bed,aes(x=(beg+end)/2,y=0,label=feature),angle=45,size=2,hjust=0,color='black')
+        coord_cartesian(xlim=c(1,my.xmax),ylim=c(yused.min,200)) +
+        geom_rect(data=bed,aes(x=beg,y=0,xmin=beg,xmax=end,ymin=yused.min,ymax = 200,fill=feature),alpha=0.15,color=NA) +
+        geom_text(data=bed,aes(x=(beg+end)/2,y=200,label=feature),angle=45,size=2,hjust=1,color='black')
       
       yused2 = temp[,name.prob]
       yused2.max = max(yused2)# + max(abs(yused2)*0.2) 
@@ -158,8 +189,8 @@ for (plasmid in seqtypeswant) {
         geom_text(data=bed,aes(x=(beg+end)/2,y=max(yused2),label=feature),angle=45,size=2,hjust=1,color='black')
 
       set.seed(420)
-      if (dim(testorig)[1] > 0) {
-        test0 = testorig #[testorig$n < max(testorig$n),]
+      if (dim(G)[1] > 0) {
+        test0 = G #[G$n < max(G$n),]
         test1 = test0[sample(x=seq(1,dim(test0)[1]),simN,prob = test0[,name.prob],replace=T),]
         perc1 = ai(dim(test1[test1$m > flminlen,])[1] / simN * 1000+0.5)/10
   #      title1 = paste('plasmid',plasmid,',σ,a=',G.a)
@@ -223,3 +254,4 @@ for (plasmid in seqtypeswant) {
   }
   dev.off()
 }
+
