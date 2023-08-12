@@ -18,25 +18,27 @@ library(gridExtra)
 source('lib/tri.lib.misc.R')
 source('lib/tri.lib.graph_ps.R')
 
-gp.lib = list(
-  minX = 0,
-  minY = 0,
-  maxX = 3000,
-  maxY = 3000,
-  windowsmooth=25,
-  stepsmooth=1,
-  windowdist=50,
-  stepdist=1,
-  minpval = 0.25,
-  minpval2 = 0.25,
-  dist.test_min.length = 5,
-  dist.test_min.unique = 2,
-  dist.test_max.unique.hots = 2,
-  divby=25,
-  C.transform=FALSE,
-  use_clusterFile = FALSE
-)
-gp = gp.lib
+gp.get_gp = function() {
+  gp.orig = list(
+    minX = 0,
+    minY = 0,
+    maxX = 3000,
+    maxY = 3000,
+    windowsmooth=25,
+    stepsmooth=1,
+    windowdist=50,
+    stepdist=1,
+    minpval = 0.25,
+    minpval2 = 0.25,
+    dist.test_min.length = 5,
+    dist.test_min.unique = 2,
+    dist.test_max.unique.hots = 2,
+    divby=25,
+    C.transform=FALSE,
+    use_clusterFile = FALSE
+  )
+  .GlobalEnv$gp.orig = gp.orig
+}
 
 gp.check_gp = function(gp1,gp2,verbose=F,debug=F) {
   if (digest(gp1) != digest(gp2)) {
@@ -54,7 +56,7 @@ get_peaktype = function(my.string) {
     peaktype = "BOT"
   }
   else {
-
+    
     peaktype = "TOP"
   }
   return(peaktype)
@@ -62,26 +64,26 @@ get_peaktype = function(my.string) {
 
 debug_df = function(expected,todebug,type,verbose=F,my.data=data.frame,debug=F) {
   if (expected != todebug) {
-
+    
     cat(type,'debug FAILED\n')
     cat('- expected: ',expected,'\n')
     cat('- debug   : ',todebug,'\n')
     if (verbose == T)  {
-
+      
       cat(type,': my.data frame with',dim(my.data)[1],'rows',dim(my.data)[2],'columns\n')
     }
   }
   else {
-
+    
     cat(type,'debug SUCCESSFUL\n')
     cat('- expected: ',expected,'\n')
     cat('- debug   : ',todebug,'\n')
     if (verbose == T)  {
-
+      
       cat(type,': my.data frame with',dim(my.data)[1],'rows',dim(my.data)[2],'columns\n')
     }
   }
-#  return(invisible())
+  #  return(invisible())
 }
 
 fix_treat_name = function(df) {
@@ -112,14 +114,14 @@ parseCLUSTFile = function(file=NA,divby=-1,debug=F,verbose=F) {
   
   df3 = fix_treat_name(df3)
   to_return = df3
-
+  
   return(to_return)
 }
 
 parseFASTAFile = function(file=NA,debug=F,verbose=F) {
-
+  
   if (debug == F) {
-
+    
     lines = read.table(file)[,1]
     chrs = lines[grepl("^>(.+)$",lines)]
     seqs = lines[!grepl("^>.+$",lines)]
@@ -127,7 +129,7 @@ parseFASTAFile = function(file=NA,debug=F,verbose=F) {
     df = data.frame(chr=chrs,gene=chrs,seq=seqs)
     
     if (verbose == T) {
-
+      
       cat(file,dim(df),'\n')
     }
     
@@ -136,9 +138,9 @@ parseFASTAFile = function(file=NA,debug=F,verbose=F) {
   }
   #---- DEBUG ----
   if (debug == T) {
-
+    
     parseFASTAFile.test = function() {
-
+      
       df       = parseFASTAFile(FASTAFILES[1])
       debugmd5 = paste(basename(FASTAFILES[1]),digest(df))
       expected = 'invitro_10buf.fa f29c4bd9229050a9de2e75e0752e5e80'
@@ -151,24 +153,42 @@ parseFASTAFile = function(file=NA,debug=F,verbose=F) {
   return(to_return)
 }
 
+pos.convert = function(pos.buf1,buf1,buf2) {
+  #based on -10 buf, peak at peak.true = 0 -> peak.10 = 10; peak.true 78 = peak.10 at 88.
+  # .:. peak.true = peak.buf - buf
+  ## pos.true = pos.buf1 - buf1
+  ## peak.buf = peak.true + buf
+  
+  # then to make it based on -2000 buf, peak.2000 = peak.true + 2000
+  ## pos.buf2 = pos.true + buf2
+  ## return(pos.buf2)
+  return(pos.buf1 - buf1 + buf2)
+}
+    
 parsePEAKFile = function(file,debug=F,verbose=F) {
-
+  if (grepl('PCB0',file)) {
+    is.invivo = TRUE
+  } else {
+    is.invivo = FALSE
+  }
   if (debug == F) {
-
+    
     df = read.table(file,sep='\t')
     colnames(df) = c('chr','beg','end','peakname','val','strand','treat','VR','thres','threschar')
     
     df$gene = df$chr
-    
     df$read = as.character(df$peakname)
-    
+    if (is.invivo == TRUE) { #buf1 = 10, buf2 = 2000
+      df$beg = sapply(df$beg,pos.convert,buf1=10,buf2 = 2000)
+      df$end = sapply(df$end,pos.convert,buf1=10,buf2 = 2000)
+    }
     if (length(grepl("^[A-Za-z0-9_]+\\.?(m[0-9]+.+)$",df$read,perl=T)) > 0) {
-
+      
       df$read = as.character(gsub("^[A-Za-z0-9_]+\\.?(m[0-9]+.+)$","\\1",df$read,perl=T))
     }
     
     if (verbose == T) {
-
+      
       cat(file,dim(df),'\n')
     }
     
@@ -177,9 +197,9 @@ parsePEAKFile = function(file,debug=F,verbose=F) {
   }
   #---- DEBUG ----
   if (debug == T) {
-
+    
     parsePEAKFile.test = function() {
-
+      
       df.PCB0  = parsePEAKFile(PEAKFILES[1])
       df.T7    = parsePEAKFile(PEAKFILES[11])
       df       = rbind(df.PCB0,df.T7)
@@ -196,14 +216,25 @@ parsePEAKFile = function(file,debug=F,verbose=F) {
 }
 
 parseBEDFile = function(file,debug=F,verbose=F) {
-
+  if (grepl('invivo',file)) {
+    is.invivo = TRUE
+  } else {
+    is.invivo = FALSE
+  }
+  
   if (debug == F) {
     df = read.table(file,sep='\t')
     colnames(df) = c('chr','beg','end','feature','zero','strand')
     df$gene = df$chr
-    
+    if (defined(df[df$gene == 'RPPH1',])) {
+      df = df[df$gene !='RPPH1',]
+    }
+    if (is.invivo == TRUE) {
+      df$beg = sapply(df$beg,pos.convert,10,2000)
+      df$end = sapply(df$end,pos.convert,10,2000)
+    } 
     if (verbose == T) {
-
+      
       cat(file,dim(df),'\n')
     }   
     
@@ -211,9 +242,9 @@ parseBEDFile = function(file,debug=F,verbose=F) {
   }  
   #----- DEBUG -----
   if (debug == T) {
-
+    
     parseBEDFile.test = function() {
-
+      
       df.annotation = parseBEDFile(BEDFILES[1])
       expected = 'annotation.bed 1f27dafec79f0221d87c0e4b216838a3'
       debugmd5 = paste(basename(BEDFILES[1]),digest(df.annotation))
@@ -228,12 +259,12 @@ parseBEDFile = function(file,debug=F,verbose=F) {
 }
 
 parseMAINFile = function(gp,debug=F,verbose=F) {
-
+  
   # Parse CLUSTS
   resourcesDir = './resources/misc/'
   CLUSTFile = paste(resourcesDir,dir(resourcesDir,'final3.all.RDS'),sep='')
   CLUSTS = parseCLUSTFile(CLUSTFile,debug=T,divby=gp$divby)
-
+  
   if (debug == T) {
     expected = '9b076f1c83a66a57e549a067e72c8194'
     todebug    = digest(CLUSTS)
@@ -244,7 +275,7 @@ parseMAINFile = function(gp,debug=F,verbose=F) {
   PEAKS  = data.frame()
   
   for (file in PEAKFILES) {
-
+    
     PEAKS   = rbind(PEAKS,data.frame(parsePEAKFile(file),peaktype=get_peaktype(basename(file))))
   }
   
@@ -259,47 +290,54 @@ parseMAINFile = function(gp,debug=F,verbose=F) {
   for (file in BEDFILES) {
     CURR.BEDS = parseBEDFile(file)
     CURR.BEDS$file = file
-    if (grepl('invivo.bed',file)) {
-      begorig = CURR.BEDS$beg
-      # begcurr = CURR.BEDS$beg - 10
-      # endcurr = CURR.BEDS$end + 10
-      # 
-      # CURR.BEDS$beg = begcurr - begorig
-      # CURR.BEDS$end = endcurr - begorig
-
-      CURR.BEDS$beg = (CURR.BEDS$beg - begorig + 2000) #-10 + 2000 = 1990
-      CURR.BEDS$end = (CURR.BEDS$end - begorig + 2000) #2010 + 2000 = 4010
-      CURR.BEDS$chr = CURR.BEDS$feature
-      CURR.BEDS$gene = CURR.BEDS$feature
-      CURR.BEDS.FW = CURR.BEDS
-      CURR.BEDS.RV = CURR.BEDS
-      CURR.BEDS.FW$end = CURR.BEDS.FW$beg + 30
-      CURR.BEDS.RV$beg = CURR.BEDS.RV$end - 30
-      CURR.BEDS.FW$feature = "FW_Primer"
-      CURR.BEDS.RV$feature = "RV_Primer"
-      CURR.BEDS = rbind(CURR.BEDS.FW,CURR.BEDS.RV)
-      CURR.BEDS = CURR.BEDS[order(CURR.BEDS$chr,CURR.BEDS$beg,CURR.BEDS$end),]
-    } else if (grepl('invivo_exon.bed',file)) {
-      CURR.BEDS$beg = (CURR.BEDS$beg) + (2000) # 78 + 2000 = 2078
-      CURR.BEDS$end = (CURR.BEDS$end) + (2000)
-      CURR.BEDS$chr = CURR.BEDS$feature
-      CURR.BEDS$gene = CURR.BEDS$feature
-      CURR.BEDS$feature = "Exon"
-      CURR.BEDS = CURR.BEDS[order(CURR.BEDS$chr,CURR.BEDS$beg,CURR.BEDS$end),]
-    }
+    # if (grepl('invivo',file)) {
+    #   begorig = CURR.BEDS$beg
+    #   # begcurr = CURR.BEDS$beg - 10
+    #   # endcurr = CURR.BEDS$end + 10
+    #   # 
+    #   # CURR.BEDS$beg = begcurr - begorig
+    #   # CURR.BEDS$end = endcurr - begorig
+    #   
+    #   CURR.BEDS$beg = (CURR.BEDS$beg - begorig + 2000) #-10 + 2000 = 1990
+    #   CURR.BEDS$end = (CURR.BEDS$end - begorig + 2000) #2010 + 2000 = 4010
+    #   CURR.BEDS$chr = CURR.BEDS$feature
+    #   CURR.BEDS$gene = CURR.BEDS$feature
+    #   CURR.BEDS.FW = CURR.BEDS
+    #   CURR.BEDS.RV = CURR.BEDS
+    #   CURR.BEDS.FW$end = CURR.BEDS.FW$beg + 30
+    #   CURR.BEDS.RV$beg = CURR.BEDS.RV$end - 30
+    #   CURR.BEDS.FW$feature = "FW_Primer"
+    #   CURR.BEDS.RV$feature = "RV_Primer"
+    #   CURR.BEDS = rbind(CURR.BEDS.FW,CURR.BEDS.RV)
+    #   CURR.BEDS = CURR.BEDS[order(CURR.BEDS$chr,CURR.BEDS$beg,CURR.BEDS$end),]
+    # }
+    # if (grepl('invivo',file)) {
+    #   next
+    # } else {
+    #   CURR.BEDS.FW = subset(CURR.BEDS[CURR.BEDS$feature == "FW_Primer",],select=-end)
+    #   CURR.BEDS.RV = subset(CURR.BEDS[CURR.BEDS$feature == "RV_Primer",],select=c('chr','end'))
+    #   CURR.BEDS.FW$feature = "Amplicon"
+    #   CURR.BEDS.FW = merge(CURR.BEDS.FW,CURR.BEDS.RV,by='chr')
+    #   CURR.BEDS$beg = CURR.BEDS$beg - 10
+    #   CURR.BEDS$end = CURR.BEDS$end + 10
+    # }
     BEDS   = rbind(BEDS,CURR.BEDS)
   }
+  
+  BEDS2 = BEDS[grep('invivo',BEDS$file),]
+  BEDS = BEDS[grep('invivo',BEDS$file,invert=T),]
   BEDS.FW = subset(BEDS[BEDS$feature == "FW_Primer",],select=-end)
   BEDS.RV = subset(BEDS[BEDS$feature == "RV_Primer",],select=c('chr','end'))
   BEDS.FW$feature = "Amplicon"
   BEDS.FW = merge(BEDS.FW,BEDS.RV,by='chr')
+  BEDS.FW$beg = BEDS.FW$beg - 10
+  BEDS.FW$end = BEDS.FW$end + 10 
   BEDS = rbind(BEDS,BEDS.FW)
-  BEDS = BEDS[BEDS$chr != "RPPH1",]
-  BEDS = BEDS[order(BEDS$chr,BEDS$beg,BEDS$end),]
-  
-  if (debug == T) {
+  BEDS = rbind(BEDS,BEDS2)
 
-    expected = '83b20bb3d808ea5f32a90ed16a4c7905 '
+  if (debug == T) {
+    
+    expected = 'e75c59cfffd53749823e9a247dc648db  '
     todebug    = digest(BEDS)
     debug_df(expected=expected,todebug=todebug,type="BEDS",my.data=BEDS,verbose=T)
   }
@@ -307,25 +345,25 @@ parseMAINFile = function(gp,debug=F,verbose=F) {
   FASTAS  = data.frame()
   
   for (file in FASTAFILES) {
-
+    
     FASTAS   = rbind(FASTAS,parseFASTAFile(file))
   }
   if (debug == T) {
-
+    
     expected = 'ed32b8d93bc599aa11de3003dd1e01d3'
     todebug    = digest(FASTAS)
     debug_df(expected=expected,todebug=todebug,type="FASTAS",my.data=FASTAS,verbose=T)
   }
   
- # Parse BIGFASTAS
+  # Parse BIGFASTAS
   BIGFASTAS  = data.frame()
- 
+  
   for (file in BIGFASTAFILES) {
-
+    
     BIGFASTAS   = rbind(BIGFASTAS,parseFASTAFile(file))
   }
   if (debug == T) {
-
+    
     expected = 'dab2095bdbbd4d63ce7428724435644f'
     todebug    = digest(BIGFASTAS)
     debug_df(expected=expected,todebug=todebug,type="BIGFASTAS",my.data=BIGFASTAS,verbose=T)
@@ -336,32 +374,36 @@ parseMAINFile = function(gp,debug=F,verbose=F) {
   FASTAS = merge(BIGFASTAS,FASTAS,by='gene')
   FASTAS = subset(FASTAS,select=c('chr','gene','seq','seq.amp'))
   if (debug == T) {
-
+    
     expected = '470c8ca5e36cc56114827887c3adedcc'
     todebug    = digest(FASTAS)
     debug_df(expected=expected,todebug=todebug,type="FASTAS",my.data=FASTAS,verbose=T)
   }
   
   FASTAS = merge(FASTAS,subset(BEDS[BEDS$feature == 'Amplicon',],select=-gene),by='chr')
-  FASTAS[FASTAS$feature == "Amplicon",]$beg = FASTAS[FASTAS$feature == "Amplicon",]$beg - 10
-  FASTAS[FASTAS$feature == "Amplicon",]$end = FASTAS[FASTAS$feature == "Amplicon",]$end + 10
-  
+  # FASTAS[FASTAS$feature == "Amplicon",]$beg = FASTAS[FASTAS$feature == "Amplicon",]$beg - 10
+  # FASTAS[FASTAS$feature == "Amplicon",]$end = FASTAS[FASTAS$feature == "Amplicon",]$end + 10
+  # 
   # sanity chekc
   FASTAS[!FASTAS$gene %in% BIGFASTAS$gene,]$gene
   BIGFASTAS[!BIGFASTAS$gene %in% FASTAS$gene,]$gene
   (BEDS[!BEDS$gene %in% FASTAS$gene,]$gene)
   (FASTAS[!FASTAS$gene %in% BEDS$gene,]$gene)
-
+  
   #sanity check
   test1 = FASTAS
   test1$len = test1$end - test1$beg
   test1$seq.len = nchar(test1$seq)
   test1$seq.amp.len = nchar(test1$seq.amp)
   test1 = subset(test1,select=c(-seq,-seq.amp))
+  head(test1)
   size(test1[test1$len != test1$seq.amp.len,])
-
+  
   my.list=list(PEAKS=PEAKS,BEDS=BEDS,FASTAS=FASTAS,CLUST=CLUSTS)
-  return(my.list)
+  .GlobalEnv$BEDS = BEDS
+  .GlobalEnv$FASTAS = FASTAS
+  .GlobalEnv$CLUSTS = CLUSTS
+  .GlobalEnv$PEAKS = PEAKS
 }
 
 
@@ -424,40 +466,40 @@ slice_bed = function(my.beds=BEDS,my.params=list(),my.params_regex=c(),genewant 
 }
 
 slice_df = function(my.data,my.params=list(),my.params_regex=list(),verbose=F,debug=F) {
-
+  
   #gene.want='any',treat.want='any',peaktype.want='any',VR.want='any',thres.want='any',verbose=F,debug=F)
   if (length(my.params) == 0) {
-
+    
     return(my.data)
   }
   for (i in 1:length(my.params))  {
-
+    
     orig = my.data
     paramname = names(my.params)[i]
     paramwant = my.params[i][[1]]
     isregex = my.params_regex[i]
     if (isregex == TRUE) {
-
+      
       cat(i,'. ',paramname,': ',paramwant,' (regex): \t',sep='')
     }
     else {
-
+      
       cat(i,'. ',paramname,': ',paramwant,'\t',sep='')
     }
     
     if (paramwant == 'any') {
-
+      
       cat(': From',dim(orig)[1],'x',dim(orig)[2],'to',dim(my.data)[1],'x',dim(my.data)[2],'\n',sep=' ')
       next
     }
-
+    
     my.data = my.data[!is.na(my.data[,paramname]),]
     if (isregex == FALSE) {
-
+      
       my.data = my.data[my.data[,paramname] == paramwant,]
     }
     else {
-
+      
       my.data = my.data[grep(paramwant,my.data[,paramname]),]
     }
     cat(': From',dim(orig)[1],'x',dim(orig)[2],'to',dim(my.data)[1],'x',dim(my.data)[2],'\n',sep=' ')
@@ -559,7 +601,7 @@ do_distributionTests = function(df = data.frame(), positionTypes = c('mean','ori
       } else if (grepl("end",posType2)) {
         posType2 = gsub("end","beg",posType2,perl=T)
       }
-
+      
       df = df[order(df[,'cluster'],df[,posType1],df[,posType2]),]
       
       # Loop through testTypes
@@ -613,7 +655,7 @@ do_distributionTests = function(df = data.frame(), positionTypes = c('mean','ori
           # Get min y-axis for that cluster (to be added later)
           
           dm = dm[order(dm$cluster,dm[,posType1],dm[,posType2]),]; dm$y = seq(1,dim(dm)[1]);# = reorder_y(dm)
- 
+          
           dm.temp.draw   = dm
           dm.temp.draw$x = dm[,posType1]
           
@@ -717,13 +759,13 @@ do_distributionTests = function(df = data.frame(), positionTypes = c('mean','ori
                            y1=my.range$i1,
                            x=100,y=my.range$i0,xmin=100,xmax=150)
               )
-
+              
               # Add to debug drawing
               # get color            
               my.range$col = dist.test_get.color(my.range$p,gp)
               dm.to_draw = data.frame(x=dm[my.range$seq,posType1] + gp$divby,y=dm[my.range$seq,]$y)
               p = p + geom_line(data=dm.to_draw,aes(x=x,y=y),color=my.range$col,lwd=0.5)
-             
+              
             }
             
             # if current i is at max i - 1, then break (can't test if i == max.i as there'll only be 1 point)
@@ -848,7 +890,7 @@ re.sc = function(my.df,my.sc,positionTypes,testTypes) {#,posTypeWant = 'beg') {
     positionType1     = paste(positionTypePrint,'beg',sep='')
     positionType2     = paste(positionTypePrint,'end',sep='')
     
-#    my.df = my.df[order(my.df[,'cluster'],my.df[,positionType1], my.df[,positionType2]),]; my.df$y = seq(1,dim(my.df)[1])
+    #    my.df = my.df[order(my.df[,'cluster'],my.df[,positionType1], my.df[,positionType2]),]; my.df$y = seq(1,dim(my.df)[1])
     posTypes = c(positionType1,positionType2)
     for (posTypesInd in seq(1,length(posTypes))) {
       posType1 = posTypes[posTypesInd]
@@ -886,7 +928,7 @@ re.sc = function(my.df,my.sc,positionTypes,testTypes) {#,posTypeWant = 'beg') {
     }
   }
   
-#  my.df = my.df[order(my.df$cluster,my.df$meanbeg, my.df$meanend),]; my.df$y = seq(1,dim(my.df)[1])
+  #  my.df = my.df[order(my.df$cluster,my.df$meanbeg, my.df$meanend),]; my.df$y = seq(1,dim(my.df)[1])
   for (positionTypesInd in seq(1,length(positionTypes))) {
     positionType      = positionTypes[positionTypesInd]
     
@@ -926,8 +968,8 @@ re.sc = function(my.df,my.sc,positionTypes,testTypes) {#,posTypeWant = 'beg') {
             testdm = cbind(testdm,data.frame(varname=my.df[,pval.varname]))
           }
           testInd = testInd + 1
-
-        #      testdm.name = rbind(testdm.name,varname)
+          
+          #      testdm.name = rbind(testdm.name,varname)
         }
       }
       colnames(testdm) = paste(posType1,'.',testTypes,'.sig.coords',sep='')
@@ -973,7 +1015,7 @@ re.sc = function(my.df,my.sc,positionTypes,testTypes) {#,posTypeWant = 'beg') {
   }
   
   head(my.df)
-
+  
   #my.scbackup = my.sc
   #my.sc = my.scbackup
   my.sc = data.frame()
@@ -987,7 +1029,7 @@ re.sc = function(my.df,my.sc,positionTypes,testTypes) {#,posTypeWant = 'beg') {
     positionType1     = paste(positionTypePrint,'beg',sep='')
     positionType2     = paste(positionTypePrint,'end',sep='')
     
-#    my.df = my.df[order(my.df[,'cluster'],my.df[,positionType1], my.df[,positionType2]),]; my.df$y = seq(1,dim(my.df)[1])
+    #    my.df = my.df[order(my.df[,'cluster'],my.df[,positionType1], my.df[,positionType2]),]; my.df$y = seq(1,dim(my.df)[1])
     posTypes = c(positionType1,positionType2)
     for (posTypesInd in seq(1,length(posTypes))) {
       posType1 = posTypes[posTypesInd]
@@ -1013,8 +1055,8 @@ re.sc = function(my.df,my.sc,positionTypes,testTypes) {#,posTypeWant = 'beg') {
         
         if (defined(my.df[my.df[,varname] != 0,])) {
           test6 = my.df[my.df[,varname] != 0,]
-        #test6 = my.df[my.df$meanbeg.unif.sig.coords != 0,]
-        #[test6$meanbeg.unif.sig.coords != 0,]
+          #test6 = my.df[my.df$meanbeg.unif.sig.coords != 0,]
+          #[test6$meanbeg.unif.sig.coords != 0,]
           my.edge6 = findedge(test6$y)
           my.seq6 = data.frame()
           print('here3')
@@ -1046,17 +1088,17 @@ re.sc = function(my.df,my.sc,positionTypes,testTypes) {#,posTypeWant = 'beg') {
         my.Xmax = my.Xmax + 50
       }
       print('here7')
-
+      
     }
     print('here8')
   }
-
+  
   return(my.sc)
 }
 
 CLUSTFILES  = my.order(paste('resources/misc/',dir("./resources/misc/","*final*.RDS"),sep=''))
 PEAKFILES  = my.order(paste('resources/peaks/',dir("./resources/peaks/","*.BED"),sep=''))
-BEDFILES   = my.order(paste('resources/bed/',dir("./resources/bed/","*.bed$"),sep=''))
+BEDFILES   = my.order(paste('resources/bed/',dir("./resources/bed/","*\\.bed$"),sep=''))
 FASTAFILES = my.order(paste('resources/fa/',dir("./resources/fa/","*.fa"),sep=''))
 BIGFASTAFILES = my.order(paste('resources/bigfa/',dir("./resources/bigfa/","bigfa.fa"),sep=''))
 
@@ -1065,19 +1107,4 @@ BIGFASTAFILES = my.order(paste('resources/bigfa/',dir("./resources/bigfa/","bigf
 #parseFASTAFile(debug=T)
 #parseCLUSTFile(debug=T)
 
-MAIN = parseMAINFile(gp=gp,debug=T)
-
-CLUSTS  = MAIN$CLUST
-BEDS    = MAIN$BED
-PEAKS   = MAIN$PEAK
-FASTAS  = MAIN$FASTA
-
-
-my.par = list(
-  'genes'=my.order(unique(PEAKS$gene)),
-  'treats'=my.order(unique(PEAKS$treat)),
-  'VRs'=my.order(unique(PEAKS$VR)),
-  'thres'=my.order(unique(PEAKS$thres)),
-  'peaktypes'=my.order(unique(PEAKS$peaktype))
-)
 

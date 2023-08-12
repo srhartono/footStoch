@@ -1,8 +1,15 @@
 source("lib/tri.lib.main.R")
-#CLUSTFILES, PEAKFILES, BEDFILES, FASTAFILES, 
-#CLUSTS, PEAKS, BEDS, FASTAS
-#slice_df
-#gp.lib
+
+gp.get_gp() # get gp.orig into .GlobalEnv
+parseMAINFile(gp=gp.orig,debug=T); # get CLUSTS, PEAKS, BEDS, FASTAS into .GlobalEnv
+
+my.par = list(
+  'genes'=my.order(unique(PEAKS$gene)),
+  'treats'=my.order(unique(PEAKS$treat)),
+  'VRs'=my.order(unique(PEAKS$VR)),
+  'thres'=my.order(unique(PEAKS$thres)),
+  'peaktypes'=my.order(unique(PEAKS$peaktype))
+)
 
 head(PEAKS)
 my.par$treats

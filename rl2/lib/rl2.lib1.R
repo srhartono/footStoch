@@ -105,29 +105,29 @@ rl2.fa.get_FASTAS = function(df.fasta=NA,force=F,file=NA,use.default=T) {
   return(FASTAS.rl2)
 }
 
-dg.sigma.precalc = function(m.max=10000,a,sigma,cons,file=NA,use.default=T,force=T,print=F,my.title='') {
+calc.G_a_sigma = function(m.min=0,m.max,a,sigma,cons,file=NA,use.default=T,force=T,print=F,my.title='') {
   sigma.name = pasta('min',gsub("^\\-","",as.character(sigma)))
-  m.precalc = seq(0,m.max)
+  m.precalc = seq(m.min,m.max)
   file.default = pasta('resources/variables/dg.sigma.',sigma.name,'.',max(m.precalc),'.RDS')
   
   #calculate all B sigma for length nmax
   if (use.default == T) {
     file = file.default
-    print(paste('rl2.lib1.R::B.precalc: Using default file:',file))
+    #print(paste('rl2.lib1.R::B.precalc: Using default file:',file))
   }
   if (!is.na(file)) {
     if (force == FALSE) {
       if (file.exists(file)) {
         dg.sigma = readRDS(file)
-        print(paste('rl2.lib1.R::B.precalc: Loaded',file))
+        #print(paste('rl2.lib1.R::B.precalc: Loaded',file))
         return(dg.sigma)
       }
-    } else {
-      print('rl2.lib1.R::B.precalc: file.RDS exist but force is TRUE, so overwriting!')
+    # } else {
+    #   print('rl2.lib1.R::B.precalc: file.RDS exist but force is TRUE, so overwriting!')
     }
-    if (!file.exists(file)) {
-      print('rl2.lib1.R::B.precalc: file.RDS does not exist, so redoing!')
-    }
+    # if (!file.exists(file)) {
+    #   print('rl2.lib1.R::B.precalc: file.RDS does not exist, so redoing!')
+    # }
   }
   dg.sigma = data.frame()
   
@@ -137,11 +137,11 @@ dg.sigma.precalc = function(m.max=10000,a,sigma,cons,file=NA,use.default=T,force
     m=m.precalc,
     a = a,
     sigma = sigma,
-    dg.sigma = a + ((2 * pi^2 * cons$C * cons$K) * (alpha + m.precalc * cons$A)^2)/ (4 * pi^2 * cons$C + cons$K * m.precalc) 
+    dg.sigma = ((2 * pi^2 * cons$C * cons$K) * (alpha + m.precalc * cons$A)^2)/ (4 * pi^2 * cons$C + cons$K * m.precalc) 
   )
-  dg.sigma[dg.sigma$m == 0,]$dg.sigma = dg.sigma[dg.sigma$m == 0,]$dg.sigma - a
+  dg.sigma[dg.sigma$m > 0,]$dg.sigma = a + dg.sigma[dg.sigma$m > 0,]$dg.sigma
   saveRDS(dg.sigma,file=file)
-  print(paste('saved as',file,'; dim =',paste(dim(dg.sigma),collapse=' ')))
+  #print(paste('saved as',file,'; dim =',paste(dim(dg.sigma),collapse=' ')))
   cat("\n")
   if (print == T) {
     plot(dg.sigma$m,dg.sigma$dg.sigma,type='l',xlim=c(0,1000),ylim=c(0,500),main=paste(my.title,'\nΔG of R-loop formation minus sum(B), varied by R-loop length\na =',a,'; σ =',sigma),xlab='m\nR-loop length (bp)',ylab='ΔG (kcal/mol)')
@@ -262,15 +262,6 @@ dg.merge = function(dg,seq1) {
   dgseq1 = dgseq1[order(dgseq1$i0,dgseq1$i1,dgseq1$chunk),]
   return(dgseq1)
 }
-
-# dg.merge = function(dg,seq1) {
-#   dgseq1 = rl2.fa.get_chunk(seq1,window=1);size(dgseq1)
-#   dgseq1 = merge(dgseq1,subset(dg[dg$type == 'DD',],select=c(chunk,B)),by='chunk');size(dgseq1);colnames(dgseq1)[dim(dgseq1)[2]] = 'DD'
-#   dgseq1 = merge(dgseq1,subset(dg[dg$type == 'RD',],select=c(chunk,B)),by='chunk');size(dgseq1);colnames(dgseq1)[dim(dgseq1)[2]] = 'RD'
-#   dgseq1 = merge(dgseq1,subset(dg[dg$type == 'RD.min.DD',],select=c(chunk,B)),by='chunk');size(dgseq1);colnames(dgseq1)[dim(dgseq1)[2]] = 'RD.min.DD'
-#   dgseq1 = dgseq1[order(dgseq1$i0,dgseq1$i1,dgseq1$chunk),]
-#   return(dgseq1)
-# }
 
 dgB.calc = function(par.n,par.m,dgseqB) {
   dgb = function(x,dg) {
