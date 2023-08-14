@@ -150,7 +150,35 @@ calc.G_a_sigma = function(m.min=0,m.max,a,sigma,cons,file=NA,use.default=T,force
   return(dg.sigma)
 }
 
+calc.time = function(nmax,mmax) {
+  mytime = (nmax*mmax/2e5*0.920398)
+  print(pasta(ai(mytime/60),'min ',ai(mytime %% 60),'sec'))
+}
 
+
+get_dgB = function(seqtypewant,myseqs,seqtypes) {
+  seq1 = myseqs[seqtypes == seqtypewant]
+  N1 = nchar(seq1)
+  seqtype = seqtypes[seqtypes == seqtypewant]
+  print(paste('Doing',seqtype))
+  
+  
+  file.dgseq = pasta('rl2/resources/dgtemp/',seqtype,'_',par$window,'_dgseq.RDS')
+  file.dgB = pasta('rl2/resources/dgtemp/',seqtype,'_',par$window,'_dgB.RDS')
+  # file.dgB.2k = pasta('rl2/resources/dgtemp/',seqtype,'_',par$window,'_dgB2k.RDS')
+
+  print(paste('- rl2.fa.get_chunk',seqtype))
+  if (file.exists(file.dgseq)) { #} & par$force == F) {
+    dgseq1 = readRDS(file.dgseq)
+    dgseq1$seqtype = seqtype
+  }
+  if (file.exists(file.dgB)) {#} & par$force == F) {
+    print(paste('- ',file.dgB,'exist!'))
+    dgB1 = readRDS(file=file.dgB)
+    print(paste(max(dgB1$n),' x ',max(dgB1$m)))
+  }
+  return(dgB1)
+}
 
 fa.gen_random = function(n=2000) {
   # Generate random seq1
